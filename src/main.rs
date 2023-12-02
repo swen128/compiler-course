@@ -17,5 +17,9 @@ fn main() {
         ],
     };
     
-    println!("{}", a86::print(program));
+    let context = a86::CompilationContext {
+        platform: a86::Platform::Linux,
+    };
+    
+    println!("{}", a86::print(program, context));
 }
