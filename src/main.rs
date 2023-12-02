@@ -14,11 +14,11 @@ use a86::printer::{
 fn main() {
     let program = a86::ast::Program {
         statements: vec![
-            Global { name: "main".to_string() },
-            Label { name: "main".to_string() },
+            Global { name: "entry".to_string() },
+            Label { name: "entry".to_string() },
             Mov {
                 dest: Register(RAX),
-                src: Immediate(0),
+                src: Immediate(12),
             },
             Ret,
         ],
@@ -28,5 +28,6 @@ fn main() {
         platform: Platform::Linux,
     };
     
-    println!("{}", a86::printer::print(program, context));
+    println!("{}", a86::printer::print(&program, &context));
+    println!("{}", a86::interpreter::interpret(&program));
 }

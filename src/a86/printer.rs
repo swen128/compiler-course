@@ -10,9 +10,9 @@ pub enum Platform {
 }
 
 
-pub fn print(program: Program, context: CompilationContext) -> String {
+pub fn print(program: &Program, context: &CompilationContext) -> String {
     let mut output = String::new();
-    for statement in program.statements {
+    for statement in &program.statements {
         output.push_str(&print_statement(&statement, &context));
         output.push_str("\n");
     }
