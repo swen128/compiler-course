@@ -1,7 +1,6 @@
-pub mod a86;
-pub mod mylang;
-
-use a86::printer::{CompilationContext, Platform};
+use compiler_course::a86;
+use compiler_course::a86::printer::{CompilationContext, Platform};
+use compiler_course::mylang;
 
 fn main() {
     let mylang_source = "(add1 (sub1 (add1 42)))";

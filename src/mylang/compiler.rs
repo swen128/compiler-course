@@ -1,7 +1,7 @@
 use crate::a86::ast::*;
-use crate::mylang;
+use super::ast;
 
-pub fn compile(program: mylang::ast::Program) -> Program {
+pub fn compile(program: ast::Program) -> Program {
     let mut statements = vec![
         Statement::Global {
             name: "entry".to_string(),
@@ -15,20 +15,20 @@ pub fn compile(program: mylang::ast::Program) -> Program {
     Program { statements }
 }
 
-fn compile_expr(expr: mylang::ast::Expr) -> Vec<Statement> {
+fn compile_expr(expr: ast::Expr) -> Vec<Statement> {
     match expr {
-        mylang::ast::Expr::Lit(lit) => compile_literal(lit),
+        ast::Expr::Lit(lit) => compile_literal(lit),
 
-        mylang::ast::Expr::Prim1(op, expr) => match op {
-            mylang::ast::Op1::Add1 => compile_add1(*expr),
-            mylang::ast::Op1::Sub1 => compile_sub1(*expr),
+        ast::Expr::Prim1(op, expr) => match op {
+            ast::Op1::Add1 => compile_add1(*expr),
+            ast::Op1::Sub1 => compile_sub1(*expr),
         },
     }
 }
 
-fn compile_literal(lit: mylang::ast::Lit) -> Vec<Statement> {
+fn compile_literal(lit: ast::Lit) -> Vec<Statement> {
     match lit {
-        mylang::ast::Lit::Int(i) => {
+        ast::Lit::Int(i) => {
             vec![Statement::Mov {
                 dest: Operand::Register(Register::RAX),
                 src: Operand::Immediate(i),
@@ -37,7 +37,7 @@ fn compile_literal(lit: mylang::ast::Lit) -> Vec<Statement> {
     }
 }
 
-fn compile_add1(child: mylang::ast::Expr) -> Vec<Statement> {
+fn compile_add1(child: ast::Expr) -> Vec<Statement> {
     let mut statements = compile_expr(child);
     statements.push(Statement::Add {
         dest: Operand::Register(Register::RAX),
@@ -46,7 +46,7 @@ fn compile_add1(child: mylang::ast::Expr) -> Vec<Statement> {
     statements
 }
 
-fn compile_sub1(child: mylang::ast::Expr) -> Vec<Statement> {
+fn compile_sub1(child: ast::Expr) -> Vec<Statement> {
     let mut statements = compile_expr(child);
     statements.push(Statement::Sub {
         dest: Operand::Register(Register::RAX),

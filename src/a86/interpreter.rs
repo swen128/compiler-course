@@ -1,5 +1,5 @@
-use crate::a86::ast::*;
-use crate::a86::printer::*;
+use super::ast::*;
+use super::printer::*;
 use std::process::Command;
 
 pub fn interpret(program: &Program) -> String {
@@ -11,7 +11,7 @@ pub fn interpret(program: &Program) -> String {
     );
 
     std::fs::create_dir_all("out").expect("failed to create directory");
-    
+
     std::fs::write("out/asm.s", asm).expect("failed to write file");
 
     Command::new("nasm")

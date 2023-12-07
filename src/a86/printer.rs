@@ -1,4 +1,4 @@
-use crate::a86::ast::*;
+use super::ast::*;
 
 pub struct CompilationContext {
     pub platform: Platform,
