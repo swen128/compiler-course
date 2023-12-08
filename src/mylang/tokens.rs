@@ -1,9 +1,10 @@
 use super::document::Range;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TokenKind {
     ParenOpen,
     ParenClose,
+    Minus,
     Integer(i64),
     Symbol(String),
 }

@@ -32,8 +32,9 @@ fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
                 "Unexpected closing parenthesis at: {:?}",
                 range.start
             )),
-            TokenKind::Integer(_) => parse_atom(tokens),
-            TokenKind::Symbol(_) => parse_atom(tokens),
+            TokenKind::Minus => parse_negative_int(tokens),
+            TokenKind::Integer(_) => parse_positive_int(tokens),
+            TokenKind::Symbol(_) => parse_symbol(tokens),
         },
     }
 }
@@ -56,14 +57,46 @@ fn parse_list(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
     Err("Unexpected EOF while parsing list".to_string())
 }
 
-fn parse_atom(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
+fn parse_symbol(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
     match tokens.next() {
-        None => Err("Unexpected EOF while parsing atom".to_string()),
+        None => Err("Unexpected EOF while parsing symbol".to_string()),
 
         Some(Token { token, range }) => match token {
-            TokenKind::Integer(i) => Ok(Expr::Atom(Atom::Integer(i))),
             TokenKind::Symbol(s) => Ok(Expr::Atom(Atom::Symbol(s))),
             _ => Err(format!("Unexpected token at: {:?}", range.start)),
         },
+    }
+}
+
+fn parse_positive_int(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
+    match tokens.next() {
+        None => Err("Unexpected EOF while parsing positive int".to_string()),
+
+        Some(Token { token, range }) => match token {
+            TokenKind::Integer(i) => Ok(Expr::Atom(Atom::Integer(i))),
+            _ => Err(format!("Unexpected token at: {:?}", range.start)),
+        },
+    }
+}
+
+fn parse_negative_int(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
+    let Token { token, range } = tokens
+        .next()
+        .ok_or("Unexpected EOF while parsing negative int")?;
+
+    if token != TokenKind::Minus {
+        return Err(format!(
+            "Unexpected token '{:?}' at: {:?}",
+            token, range.start
+        ));
+    }
+
+    let Token { token, range } = tokens
+        .next()
+        .ok_or("Unexpected EOF while parsing negative int")?;
+
+    match token {
+        TokenKind::Integer(i) => Ok(Expr::Atom(Atom::Integer(-i))),
+        _ => Err(format!("Unexpected token at: {:?}", range.start)),
     }
 }
