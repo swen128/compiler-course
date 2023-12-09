@@ -29,6 +29,7 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Mov { dest, src } => print_mov(dest, src),
         Statement::Cmp { dest, src } => print_cmp(dest, src),
         Statement::Je { label } => format!("\tje {}", print_label(label, context)),
+        Statement::Jmp { label } => format!("\tjmp {}", print_label(label, context)),
         Statement::Push { src } => format!("\tpush {}", print_operand(src)),
         Statement::Pop { dest } => format!("\tpop {}", print_operand(dest)),
         Statement::Add { dest, src } => print_add(dest, src),

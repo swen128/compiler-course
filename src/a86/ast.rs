@@ -3,6 +3,7 @@ pub enum Statement {
     Label { name: String },
     Mov { dest: Operand, src: Operand },
     Cmp { dest: Operand, src: Operand },
+    Jmp { label: String },
     Je { label: String },
     Push { src: Operand },
     Pop { dest: Operand },

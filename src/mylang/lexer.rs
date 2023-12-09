@@ -72,8 +72,8 @@ fn take_first_token(chars: &mut Peekable<Enumerate<Chars>>) -> Result<(TokenKind
                 chars.next();
                 Ok((TokenKind::Minus, 1))
             }
-            '1'..='9' => Ok(take_int_token(chars)),
-            _ if is_symbol_char(char) => Ok(take_symbol_token(chars)),
+            '0'..='9' => Ok(take_int_token(chars)),
+            _ if char.is_alphanumeric() => Ok(take_symbol_token(chars)),
             _ => Err(format!("Unexpected character: {}", char)),
         },
     }
@@ -114,5 +114,5 @@ fn take_symbol_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usiz
 }
 
 fn is_symbol_char(char: &char) -> bool {
-    char.is_alphanumeric() || *char == '_'
+    char.is_alphanumeric() || *char == '?' || *char == '!' || *char == '_'
 }

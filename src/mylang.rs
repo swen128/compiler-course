@@ -9,7 +9,7 @@ mod document;
 pub fn parse(source: &str) -> Result<ast::Program, String> {
     let tokens = lexer::tokenize(source)?;
     let expr = s_expression::parse(tokens)?;
-    parser::parse(expr)
+    parser::parse(&expr)
 }
 
 pub fn compile(source: &str) -> Result<crate::a86::ast::Program, String> {

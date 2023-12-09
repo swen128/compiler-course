@@ -2,11 +2,19 @@ use std::{iter::Peekable, vec::IntoIter};
 
 use super::tokens::{Token, TokenKind};
 
+#[derive(Debug)]
 pub enum Expr {
     Atom(Atom),
-    List(Vec<Expr>),
+    List(List),
 }
 
+#[derive(Debug)]
+pub struct List {
+    pub head: Atom,
+    pub tail: Vec<Expr>,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Atom {
     Symbol(String),
     Integer(i64),
@@ -40,13 +48,29 @@ fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
 }
 
 fn parse_list(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
+    tokens
+        .next()
+        .ok_or("Expected opening parenthesis. Got EOF instead.")?;
+
+    let head = match tokens.next() {
+        Some(Token { token, range: _ }) => match token {
+            TokenKind::Symbol(s) => Atom::Symbol(s),
+            _ => return Err("Expected operator".to_string()),
+        },
+        None => return Err("Unexpected EOF while parsing list".to_string()),
+    };
+    let tail = parse_list_rest(tokens)?;
+
+    Ok(Expr::List(List { head, tail }))
+}
+
+fn parse_list_rest(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Vec<Expr>, String> {
     let mut list = vec![];
-    tokens.next();
     while let Some(Token { token, range: _ }) = tokens.peek() {
         match token {
             TokenKind::ParenClose => {
                 tokens.next();
-                return Ok(Expr::List(list));
+                return Ok(list);
             }
             _ => match parse_expr(tokens) {
                 Ok(expr) => list.push(expr),
