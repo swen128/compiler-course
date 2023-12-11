@@ -20,7 +20,7 @@ fn it_adds_and_subtracts() {
 fn invalid_syntax() {
     let input = "((add1 (sub1 (add1 42))))";
     let result = mylang::run(input);
-    
+
     assert_eq!(result, Err("Expected operator".to_string()));
 }
 
@@ -45,5 +45,29 @@ fn nested_if() {
     let input = "(add1 (if (zero? (if (zero? 1) 0 43)) -21 18))";
     let result = mylang::run(input).unwrap();
     let expected = "19";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn if_false() {
+    let input = "(if #f 42 43)";
+    let result = mylang::run(input).unwrap();
+    let expected = "43";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn if_true() {
+    let input = "(if #t 42 43)";
+    let result = mylang::run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn if_non_boolean() {
+    let input = "(if -1 42 43)";
+    let result = mylang::run(input).unwrap();
+    let expected = "42";
     assert_eq!(result, expected);
 }

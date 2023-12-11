@@ -18,6 +18,7 @@ pub struct List {
 pub enum Atom {
     Symbol(String),
     Integer(i64),
+    Boolean(bool),
 }
 
 pub fn parse(tokens: Vec<Token>) -> Result<Expr, String> {
@@ -43,6 +44,7 @@ fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
             TokenKind::Minus => parse_negative_int(tokens),
             TokenKind::Integer(_) => parse_positive_int(tokens),
             TokenKind::Symbol(_) => parse_symbol(tokens),
+            TokenKind::Boolean(_) => parse_boolean(tokens),
         },
     }
 }
@@ -122,5 +124,16 @@ fn parse_negative_int(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, St
     match token {
         TokenKind::Integer(i) => Ok(Expr::Atom(Atom::Integer(-i))),
         _ => Err(format!("Unexpected token at: {:?}", range.start)),
+    }
+}
+
+fn parse_boolean(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
+    match tokens.next() {
+        None => Err("Unexpected EOF while parsing boolean".to_string()),
+
+        Some(Token { token, range }) => match token {
+            TokenKind::Boolean(b) => Ok(Expr::Atom(Atom::Boolean(b))),
+            _ => Err(format!("Unexpected token at: {:?}", range.start)),
+        },
     }
 }

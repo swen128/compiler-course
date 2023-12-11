@@ -3,6 +3,7 @@ pub enum Statement {
     Label { name: String },
     Mov { dest: Operand, src: Operand },
     Cmp { dest: Operand, src: Operand },
+    Cmove { dest: Operand, src: Operand },
     Jmp { label: String },
     Je { label: String },
     Push { src: Operand },
@@ -22,6 +23,15 @@ pub enum Operand {
 pub enum Register {
     RAX,
     RBX,
+    R1,
+    R2,
+    R3,
+    R4,
+    R5,
+    R6,
+    R7,
+    R8,
+    R9,
 }
 
 pub struct Program {

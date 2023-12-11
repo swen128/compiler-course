@@ -12,8 +12,8 @@ pub enum Platform {
 pub fn print(program: &Program, context: &CompilationContext) -> String {
     let mut output = String::new();
 
-    output.push_str("\tdefault rel\n" );
-    output.push_str("\tsection .text\n" );
+    output.push_str("\tdefault rel\n");
+    output.push_str("\tsection .text\n");
 
     for statement in &program.statements {
         output.push_str(&print_statement(&statement, &context));
@@ -28,6 +28,7 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Label { name } => format!("{}:", print_label(name, context)),
         Statement::Mov { dest, src } => print_mov(dest, src),
         Statement::Cmp { dest, src } => print_cmp(dest, src),
+        Statement::Cmove { dest, src } => print_cmove(dest, src),
         Statement::Je { label } => format!("\tje {}", print_label(label, context)),
         Statement::Jmp { label } => format!("\tjmp {}", print_label(label, context)),
         Statement::Push { src } => format!("\tpush {}", print_operand(src)),
@@ -45,6 +46,10 @@ fn print_mov(dest: &Operand, src: &Operand) -> String {
 
 fn print_cmp(dest: &Operand, src: &Operand) -> String {
     format!("\tcmp {}, {}", print_operand(dest), print_operand(src))
+}
+
+fn print_cmove(dest: &Operand, src: &Operand) -> String {
+    format!("\tcmove {}, {}", print_operand(dest), print_operand(src))
 }
 
 fn print_add(dest: &Operand, src: &Operand) -> String {
@@ -82,5 +87,14 @@ fn print_register(register: &Register) -> String {
     match register {
         Register::RAX => "rax".to_string(),
         Register::RBX => "rbx".to_string(),
+        Register::R1 => "r1".to_string(),
+        Register::R2 => "r2".to_string(),
+        Register::R3 => "r3".to_string(),
+        Register::R4 => "r4".to_string(),
+        Register::R5 => "r5".to_string(),
+        Register::R6 => "r6".to_string(),
+        Register::R7 => "r7".to_string(),
+        Register::R8 => "r8".to_string(),
+        Register::R9 => "r9".to_string(),
     }
 }

@@ -25,7 +25,17 @@ pub fn interpret(program: &Program) -> String {
         .expect("failed to execute process");
 
     Command::new("gcc")
-        .args(&["-o", "out/output", "out/main.o", "out/asm.o"])
+        .args(&["-o", "out/print.o", "-c", "src/a86/print.c"])
+        .output()
+        .expect("failed to execute process");
+
+    Command::new("gcc")
+        .args(&["-o", "out/values.o", "-c", "src/a86/values.c"])
+        .output()
+        .expect("failed to execute process");
+
+    Command::new("gcc")
+        .args(&["-o", "out/output", "out/main.o", "out/asm.o", "out/print.o", "out/values.o"])
         .output()
         .expect("failed to execute process");
 

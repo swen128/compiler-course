@@ -1,10 +1,14 @@
 #include <stdio.h>
-#include <inttypes.h>
+#include "values.h"
+#include "print.h"
 
-int64_t entry();
+val_t entry();
 
-int main(int argc, char** argv) {
-  int64_t result = entry();
-  printf("%" PRId64 , result);
+int main(int argc, char** argv)
+{
+  val_t result;
+
+  result = entry();
+  print_result(result);
   return 0;
 }

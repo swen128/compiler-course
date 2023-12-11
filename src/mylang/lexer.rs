@@ -22,7 +22,7 @@ impl<'a> Tokenizer<'a> {
 
     fn next_token(&mut self) -> Result<Option<Token>, String> {
         self.skip_whitespaces();
-        
+
         match self.remaining_chars.peek() {
             None => Ok(None),
 
@@ -72,6 +72,7 @@ fn take_first_token(chars: &mut Peekable<Enumerate<Chars>>) -> Result<(TokenKind
                 chars.next();
                 Ok((TokenKind::Minus, 1))
             }
+            '#' => take_boolean_token(chars),
             '0'..='9' => Ok(take_int_token(chars)),
             _ if char.is_alphanumeric() => Ok(take_symbol_token(chars)),
             _ => Err(format!("Unexpected character: {}", char)),
@@ -81,7 +82,7 @@ fn take_first_token(chars: &mut Peekable<Enumerate<Chars>>) -> Result<(TokenKind
 
 fn take_int_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usize) {
     let mut char_count = 0;
-    
+
     let mut digits = "".to_string();
     while let Some((_, c)) = chars.peek() {
         if !c.is_digit(10) {
@@ -91,7 +92,7 @@ fn take_int_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usize) 
         chars.next();
         char_count += 1;
     }
-    
+
     let value = digits.parse::<i64>().unwrap();
 
     (TokenKind::Integer(value), char_count)
@@ -99,7 +100,7 @@ fn take_int_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usize) 
 
 fn take_symbol_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usize) {
     let mut char_count = 0;
-    
+
     let mut symbol = "".to_string();
     while let Some((_, c)) = chars.peek() {
         if !is_symbol_char(c) {
@@ -111,6 +112,23 @@ fn take_symbol_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usiz
     }
 
     (TokenKind::Symbol(symbol), char_count)
+}
+
+fn take_boolean_token(
+    chars: &mut Peekable<Enumerate<Chars>>,
+) -> Result<(TokenKind, usize), String> {
+    // TODO: Check that the first character is '#'.
+    chars.next();
+
+    match chars.next() {
+        Some((_, 't')) => Ok((TokenKind::Boolean(true), 2)),
+        Some((_, 'f')) => Ok((TokenKind::Boolean(false), 2)),
+        Some((i, c)) => Err(format!(
+            "Expected a boolean token. Got '#{}' instead at offset {}.",
+            c, i
+        )),
+        None => Err("Expectead a boolean token. Got EOF instead.".to_string()),
+    }
 }
 
 fn is_symbol_char(char: &char) -> bool {
