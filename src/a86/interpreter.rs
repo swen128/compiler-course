@@ -10,38 +10,38 @@ pub fn interpret(program: &Program) -> String {
         },
     );
 
-    std::fs::create_dir_all("out").expect("failed to create directory");
+    let asm_filename = format!("out/{}.asm", hash_str(&asm));
+    let asm_output = format!("out/{}.o", hash_str(&asm));
+    let bin = format!("out/{}.run", hash_str(&asm));
 
-    std::fs::write("out/asm.s", asm).expect("failed to write file");
+    std::fs::write(&asm_filename, asm).expect("failed to write file");
 
     Command::new("nasm")
-        .args(&["-f", "elf64", "-o", "out/asm.o", "out/asm.s"])
+        .args(&["-f", "elf64", "-o", &asm_output, &asm_filename])
+        .output()
+        .expect("failed to execute process");
+
+    Command::new("make")
         .output()
         .expect("failed to execute process");
 
     Command::new("gcc")
-        .args(&["-o", "out/main.o", "-c", "src/a86/main.c"])
-        .output()
-        .expect("failed to execute process");
-
-    Command::new("gcc")
-        .args(&["-o", "out/print.o", "-c", "src/a86/print.c"])
-        .output()
-        .expect("failed to execute process");
-
-    Command::new("gcc")
-        .args(&["-o", "out/values.o", "-c", "src/a86/values.c"])
-        .output()
-        .expect("failed to execute process");
-
-    Command::new("gcc")
-        .args(&["-o", "out/output", "out/main.o", "out/asm.o", "out/print.o", "out/values.o"])
+        .args(&["-o", &bin, "out/runtime.o", &asm_output])
         .output()
         .expect("failed to execute process");
 
     // Print the command output
-    let mut command = std::process::Command::new("./out/output");
+    let mut command = std::process::Command::new(&bin);
     let output = command.output().expect("failed to execute process");
     let stdout = String::from_utf8(output.stdout).unwrap();
     stdout
+}
+
+fn hash_str(str: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    str.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
 }
