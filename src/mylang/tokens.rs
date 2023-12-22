@@ -1,4 +1,4 @@
-use super::document::Range;
+use super::document::Position;
 
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
@@ -13,5 +13,5 @@ pub enum TokenKind {
 #[derive(Debug)]
 pub struct Token {
     pub token: TokenKind,
-    pub range: Range,
+    pub position: Position,
 }

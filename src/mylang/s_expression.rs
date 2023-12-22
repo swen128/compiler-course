@@ -35,12 +35,11 @@ fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
     match tokens.peek() {
         None => Err("Unexpected EOF while parsing exprssion".to_string()),
 
-        Some(Token { token, range }) => match token {
+        Some(Token { token, position }) => match token {
             TokenKind::ParenOpen => parse_list(tokens),
-            TokenKind::ParenClose => Err(format!(
-                "Unexpected closing parenthesis at: {:?}",
-                range.start
-            )),
+            TokenKind::ParenClose => {
+                Err(format!("Unexpected closing parenthesis at: {:?}", position,))
+            }
             TokenKind::Minus => parse_negative_int(tokens),
             TokenKind::Integer(_) => parse_positive_int(tokens),
             TokenKind::Symbol(_) => parse_symbol(tokens),
@@ -55,7 +54,7 @@ fn parse_list(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
         .ok_or("Expected opening parenthesis. Got EOF instead.")?;
 
     let head = match tokens.next() {
-        Some(Token { token, range: _ }) => match token {
+        Some(Token { token, position: _ }) => match token {
             TokenKind::Symbol(s) => Atom::Symbol(s),
             _ => return Err("Expected operator".to_string()),
         },
@@ -68,7 +67,7 @@ fn parse_list(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
 
 fn parse_list_rest(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Vec<Expr>, String> {
     let mut list = vec![];
-    while let Some(Token { token, range: _ }) = tokens.peek() {
+    while let Some(Token { token, position: _ }) = tokens.peek() {
         match token {
             TokenKind::ParenClose => {
                 tokens.next();
@@ -87,9 +86,9 @@ fn parse_symbol(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> 
     match tokens.next() {
         None => Err("Unexpected EOF while parsing symbol".to_string()),
 
-        Some(Token { token, range }) => match token {
+        Some(Token { token, position }) => match token {
             TokenKind::Symbol(s) => Ok(Expr::Atom(Atom::Symbol(s))),
-            _ => Err(format!("Unexpected token at: {:?}", range.start)),
+            _ => Err(format!("Unexpected token at: {:?}", position)),
         },
     }
 }
@@ -98,32 +97,29 @@ fn parse_positive_int(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, St
     match tokens.next() {
         None => Err("Unexpected EOF while parsing positive int".to_string()),
 
-        Some(Token { token, range }) => match token {
+        Some(Token { token, position }) => match token {
             TokenKind::Integer(i) => Ok(Expr::Atom(Atom::Integer(i))),
-            _ => Err(format!("Unexpected token at: {:?}", range.start)),
+            _ => Err(format!("Unexpected token at: {:?}", position)),
         },
     }
 }
 
 fn parse_negative_int(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
-    let Token { token, range } = tokens
+    let Token { token, position } = tokens
         .next()
         .ok_or("Unexpected EOF while parsing negative int")?;
 
     if token != TokenKind::Minus {
-        return Err(format!(
-            "Unexpected token '{:?}' at: {:?}",
-            token, range.start
-        ));
+        return Err(format!("Unexpected token '{:?}' at: {:?}", token, position));
     }
 
-    let Token { token, range } = tokens
+    let Token { token, position } = tokens
         .next()
         .ok_or("Unexpected EOF while parsing negative int")?;
 
     match token {
         TokenKind::Integer(i) => Ok(Expr::Atom(Atom::Integer(-i))),
-        _ => Err(format!("Unexpected token at: {:?}", range.start)),
+        _ => Err(format!("Unexpected token at: {:?}", position)),
     }
 }
 
@@ -131,9 +127,9 @@ fn parse_boolean(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String>
     match tokens.next() {
         None => Err("Unexpected EOF while parsing boolean".to_string()),
 
-        Some(Token { token, range }) => match token {
+        Some(Token { token, position }) => match token {
             TokenKind::Boolean(b) => Ok(Expr::Atom(Atom::Boolean(b))),
-            _ => Err(format!("Unexpected token at: {:?}", range.start)),
+            _ => Err(format!("Unexpected token at: {:?}", position)),
         },
     }
 }

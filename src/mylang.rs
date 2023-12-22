@@ -6,6 +6,7 @@ pub mod s_expression;
 mod tokens;
 mod document;
 mod data_type;
+mod char_positions;
 
 pub fn parse(source: &str) -> Result<ast::Program, String> {
     let tokens = lexer::tokenize(source)?;

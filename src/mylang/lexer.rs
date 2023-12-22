@@ -1,40 +1,44 @@
-use std::{
-    char,
-    iter::{Enumerate, Peekable},
-    str::Chars,
-};
+use std::{char, iter::Peekable};
 
 use super::{
-    document::Range,
+    char_positions::CharPositions,
+    document::Position,
     tokens::{Token, TokenKind},
 };
 
 struct Tokenizer<'a> {
-    remaining_chars: Peekable<Enumerate<Chars<'a>>>,
+    remaining_chars: Peekable<CharPositions<'a>>,
 }
 
 impl<'a> Tokenizer<'a> {
     fn new(src: &str) -> Tokenizer {
         Tokenizer {
-            remaining_chars: src.chars().enumerate().peekable(),
+            remaining_chars: CharPositions::from_str(src).peekable(),
         }
+    }
+
+    fn next_char(&mut self) -> Option<(Position, char)> {
+        self.remaining_chars.next()
+    }
+
+    fn peek(&mut self) -> Option<&(Position, char)> {
+        self.remaining_chars.peek()
     }
 
     fn next_token(&mut self) -> Result<Option<Token>, String> {
         self.skip_whitespaces();
 
-        match self.remaining_chars.peek() {
+        match self.peek() {
             None => Ok(None),
 
-            Some((i, _)) => {
-                let start = *i;
-
+            Some((position, _)) => {
+                let start = position.clone();
                 let result = take_first_token(&mut self.remaining_chars);
-
-                result.map(|(kind, len)| {
-                    let end = start + len;
-                    let range = Range { start, end };
-                    Some(Token { token: kind, range })
+                result.map(move |token| {
+                    Some(Token {
+                        token,
+                        position: start,
+                    })
                 })
             }
         }
@@ -56,21 +60,21 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, String> {
     Ok(tokens)
 }
 
-fn take_first_token(chars: &mut Peekable<Enumerate<Chars>>) -> Result<(TokenKind, usize), String> {
+fn take_first_token(chars: &mut Peekable<CharPositions>) -> Result<TokenKind, String> {
     match chars.peek() {
         None => return Err("Unexpected end of input".to_string()),
         Some((_, char)) => match char {
             '(' => {
                 chars.next();
-                Ok((TokenKind::ParenOpen, 1))
+                Ok(TokenKind::ParenOpen)
             }
             ')' => {
                 chars.next();
-                Ok((TokenKind::ParenClose, 1))
+                Ok(TokenKind::ParenClose)
             }
             '-' => {
                 chars.next();
-                Ok((TokenKind::Minus, 1))
+                Ok(TokenKind::Minus)
             }
             '#' => take_boolean_token(chars),
             '0'..='9' => Ok(take_int_token(chars)),
@@ -80,9 +84,7 @@ fn take_first_token(chars: &mut Peekable<Enumerate<Chars>>) -> Result<(TokenKind
     }
 }
 
-fn take_int_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usize) {
-    let mut char_count = 0;
-
+fn take_int_token(chars: &mut Peekable<CharPositions>) -> TokenKind {
     let mut digits = "".to_string();
     while let Some((_, c)) = chars.peek() {
         if !c.is_digit(10) {
@@ -90,17 +92,14 @@ fn take_int_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usize) 
         }
         digits.push(*c);
         chars.next();
-        char_count += 1;
     }
 
     let value = digits.parse::<i64>().unwrap();
 
-    (TokenKind::Integer(value), char_count)
+    TokenKind::Integer(value)
 }
 
-fn take_symbol_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usize) {
-    let mut char_count = 0;
-
+fn take_symbol_token(chars: &mut Peekable<CharPositions>) -> TokenKind {
     let mut symbol = "".to_string();
     while let Some((_, c)) = chars.peek() {
         if !is_symbol_char(c) {
@@ -108,24 +107,21 @@ fn take_symbol_token(chars: &mut Peekable<Enumerate<Chars>>) -> (TokenKind, usiz
         }
         symbol.push(*c);
         chars.next();
-        char_count += 1;
     }
 
-    (TokenKind::Symbol(symbol), char_count)
+    TokenKind::Symbol(symbol)
 }
 
-fn take_boolean_token(
-    chars: &mut Peekable<Enumerate<Chars>>,
-) -> Result<(TokenKind, usize), String> {
+fn take_boolean_token(chars: &mut Peekable<CharPositions>) -> Result<TokenKind, String> {
     // TODO: Check that the first character is '#'.
     chars.next();
 
     match chars.next() {
-        Some((_, 't')) => Ok((TokenKind::Boolean(true), 2)),
-        Some((_, 'f')) => Ok((TokenKind::Boolean(false), 2)),
-        Some((i, c)) => Err(format!(
-            "Expected a boolean token. Got '#{}' instead at offset {}.",
-            c, i
+        Some((_, 't')) => Ok(TokenKind::Boolean(true)),
+        Some((_, 'f')) => Ok(TokenKind::Boolean(false)),
+        Some((pos, c)) => Err(format!(
+            "Expected a boolean token. Got '#{}' instead at position {:?}.",
+            c, pos
         )),
         None => Err("Expectead a boolean token. Got EOF instead.".to_string()),
     }
