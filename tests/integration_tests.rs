@@ -1,4 +1,6 @@
-use compiler_course::compile;
+use std::error::Error;
+
+use compiler_course::{compile, ParserError, Position};
 
 #[test]
 fn negative_number() {
@@ -20,8 +22,18 @@ fn it_adds_and_subtracts() {
 fn invalid_syntax() {
     let input = "((add1 (sub1 (add1 42))))";
     let result = run(input);
+    
+    match result {
+        Ok(_) => panic!("Expected a parser error."),
+        
+        Err(ParserError::AstPasringError(err)) => {
+            assert_eq!(err.position, Position::new(0, 1));
+        },
 
-    assert_eq!(result, Err("Expected operator".to_string()));
+        Err(err) => {
+            panic!("Expected a AST parsing error. Got: {:?}", err);
+        },
+    }
 }
 
 #[test]
@@ -72,7 +84,7 @@ fn if_non_boolean() {
     assert_eq!(result, expected);
 }
 
-pub fn run(source: &str) -> Result<String, String> {
+pub fn run(source: &str) -> Result<String, ParserError> {
     use std::process::Command;
 
     let asm = compile(source)?;

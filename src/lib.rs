@@ -2,8 +2,10 @@ mod a86;
 mod mylang;
 
 pub use mylang::parse;
+pub use mylang::ParserError;
+pub use mylang::document::Position;
 
-pub fn compile(source: &str) -> Result<String, String> {
+pub fn compile(source: &str) -> Result<String, ParserError> {
     parse(source)
         .map(|ast| mylang::compiler::compile(ast))
         .map(|a86_program| {

@@ -2,7 +2,7 @@ use std::{char, iter::Peekable};
 
 use super::{
     char_positions::CharPositions,
-    document::Position,
+    error::InvalidTokenError,
     tokens::{Token, TokenKind},
 };
 
@@ -17,29 +17,19 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn next_char(&mut self) -> Option<(Position, char)> {
-        self.remaining_chars.next()
-    }
-
-    fn peek(&mut self) -> Option<&(Position, char)> {
-        self.remaining_chars.peek()
-    }
-
-    fn next_token(&mut self) -> Result<Option<Token>, String> {
+    fn next_token(&mut self) -> Result<Option<Token>, InvalidTokenError> {
         self.skip_whitespaces();
 
-        match self.peek() {
+        match self.remaining_chars.next() {
             None => Ok(None),
 
-            Some((position, _)) => {
-                let start = position.clone();
-                let result = take_first_token(&mut self.remaining_chars);
-                result.map(move |token| {
-                    Some(Token {
-                        token,
-                        position: start,
-                    })
-                })
+            Some((position, char)) => {
+                let position = position.clone();
+
+                match take_first_token(&char, &mut self.remaining_chars) {
+                    Ok(token) => Ok(Some(Token { token, position })),
+                    Err(_) => Err(InvalidTokenError { position }),
+                }
             }
         }
     }
@@ -49,7 +39,7 @@ impl<'a> Tokenizer<'a> {
     }
 }
 
-pub fn tokenize(src: &str) -> Result<Vec<Token>, String> {
+pub fn tokenize(src: &str) -> Result<Vec<Token>, InvalidTokenError> {
     let mut tokenizer = Tokenizer::new(src);
     let mut tokens = Vec::new();
 
@@ -60,38 +50,29 @@ pub fn tokenize(src: &str) -> Result<Vec<Token>, String> {
     Ok(tokens)
 }
 
-fn take_first_token(chars: &mut Peekable<CharPositions>) -> Result<TokenKind, String> {
-    match chars.peek() {
-        None => return Err("Unexpected end of input".to_string()),
-        Some((_, char)) => match char {
-            '(' => {
-                chars.next();
-                Ok(TokenKind::ParenOpen)
-            }
-            ')' => {
-                chars.next();
-                Ok(TokenKind::ParenClose)
-            }
-            '-' => {
-                chars.next();
-                Ok(TokenKind::Minus)
-            }
-            '#' => take_boolean_token(chars),
-            '0'..='9' => Ok(take_int_token(chars)),
-            _ if char.is_alphanumeric() => Ok(take_symbol_token(chars)),
-            _ => Err(format!("Unexpected character: {}", char)),
-        },
+fn take_first_token(
+    head: &char,
+    tail: &mut Peekable<CharPositions>,
+) -> Result<TokenKind, InvalidCharacter> {
+    match head {
+        '(' => Ok(TokenKind::ParenOpen),
+        ')' => Ok(TokenKind::ParenClose),
+        '-' => Ok(TokenKind::Minus),
+        '#' => take_boolean_token(tail),
+        '0'..='9' => Ok(take_int_token(head, tail)),
+        _ if is_symbol_char(head) => Ok(take_symbol_token(head, tail)),
+        _ => Err(InvalidCharacter {}),
     }
 }
 
-fn take_int_token(chars: &mut Peekable<CharPositions>) -> TokenKind {
-    let mut digits = "".to_string();
-    while let Some((_, c)) = chars.peek() {
+fn take_int_token(head: &char, tail: &mut Peekable<CharPositions>) -> TokenKind {
+    let mut digits = head.to_string();
+    while let Some((_, c)) = tail.peek() {
         if !c.is_digit(10) {
             break;
         }
         digits.push(*c);
-        chars.next();
+        tail.next();
     }
 
     let value = digits.parse::<i64>().unwrap();
@@ -99,8 +80,8 @@ fn take_int_token(chars: &mut Peekable<CharPositions>) -> TokenKind {
     TokenKind::Integer(value)
 }
 
-fn take_symbol_token(chars: &mut Peekable<CharPositions>) -> TokenKind {
-    let mut symbol = "".to_string();
+fn take_symbol_token(head: &char, chars: &mut Peekable<CharPositions>) -> TokenKind {
+    let mut symbol = head.to_string();
     while let Some((_, c)) = chars.peek() {
         if !is_symbol_char(c) {
             break;
@@ -112,21 +93,16 @@ fn take_symbol_token(chars: &mut Peekable<CharPositions>) -> TokenKind {
     TokenKind::Symbol(symbol)
 }
 
-fn take_boolean_token(chars: &mut Peekable<CharPositions>) -> Result<TokenKind, String> {
-    // TODO: Check that the first character is '#'.
-    chars.next();
-
+fn take_boolean_token(chars: &mut Peekable<CharPositions>) -> Result<TokenKind, InvalidCharacter> {
     match chars.next() {
         Some((_, 't')) => Ok(TokenKind::Boolean(true)),
         Some((_, 'f')) => Ok(TokenKind::Boolean(false)),
-        Some((pos, c)) => Err(format!(
-            "Expected a boolean token. Got '#{}' instead at position {:?}.",
-            c, pos
-        )),
-        None => Err("Expectead a boolean token. Got EOF instead.".to_string()),
+        _ => Err(InvalidCharacter {}),
     }
 }
 
 fn is_symbol_char(char: &char) -> bool {
-    char.is_alphanumeric() || *char == '?' || *char == '!' || *char == '_'
+    !char.is_control() && !char.is_whitespace()
 }
+
+struct InvalidCharacter {}

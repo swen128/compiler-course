@@ -1,62 +1,85 @@
 use super::ast;
-use super::s_expression::{Atom, Expr, List};
+use super::document::Position;
+use super::error::AstPasringError;
+use super::s_expression::{Atom, Expr, ExprKind, List};
 
-pub fn parse(expr: &Expr) -> Result<ast::Program, String> {
+pub fn parse(expr: &Expr) -> Result<ast::Program, AstPasringError> {
     let ast_expr = parse_expr(expr);
     ast_expr.map(|expr| ast::Program { expr })
 }
 
-pub fn parse_expr(expr: &Expr) -> Result<ast::Expr, String> {
-    match expr {
-        Expr::Atom(atom) => parse_literal(atom),
-        Expr::List(list) => parse_list(list),
+pub fn parse_expr(expr: &Expr) -> Result<ast::Expr, AstPasringError> {
+    let position = expr.position.clone();
+    match &expr.kind {
+        ExprKind::Atom(atom) => parse_literal(&atom, position),
+        ExprKind::List(list) => parse_list(&list, position),
     }
 }
 
-fn parse_literal(atom: &Atom) -> Result<ast::Expr, String> {
+fn parse_literal(atom: &Atom, position: Position) -> Result<ast::Expr, AstPasringError> {
     match atom {
         Atom::Integer(n) => Ok(ast::Expr::Lit(ast::Lit::Int(*n))),
         Atom::Boolean(b) => Ok(ast::Expr::Lit(ast::Lit::Bool(*b))),
-        Atom::Symbol(_) => Err(format!("Expected an integer or boolean literal. Got {:?}", atom)),
+        Atom::Symbol(_) => Err(err(
+            &format!("Expected a literal. Got a symbol: {:?}", atom),
+            position.clone(),
+        )),
     }
 }
 
-fn parse_list(list: &List) -> Result<ast::Expr, String> {
-    let head = &list.head;
-    let mut tail = list.tail.iter();
+fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringError> {
+    let List(elems) = list;
+    let mut elems = elems.iter();
+    let head = elems.next().ok_or(err("Empty list.", position))?;
+    let position = head.position.clone();
 
-    match head {
-        Atom::Symbol(s) => match s.as_str() {
-            "add1" => parse_prim1(ast::Op1::Add1, &mut tail),
-            "sub1" => parse_prim1(ast::Op1::Sub1, &mut tail),
-            "zero?" => parse_prim1(ast::Op1::IsZero, &mut tail),
-            "if" => parse_if(&mut tail),
-            _ => Err(format!("Unknown operator: {}", s)),
+    match &head.kind {
+        ExprKind::Atom(Atom::Symbol(s)) => match s.as_str() {
+            "add1" => parse_prim1(ast::Op1::Add1, position, &mut elems),
+            "sub1" => parse_prim1(ast::Op1::Sub1, position, &mut elems),
+            "zero?" => parse_prim1(ast::Op1::IsZero, position, &mut elems),
+            "if" => parse_if(&mut elems, position),
+            _ => Err(AstPasringError {
+                msg: format!("Unknown operator: {}", s),
+                position,
+            }),
         },
-        _ => Err("Expected operator".to_string()),
+        _ => Err(AstPasringError {
+            msg: "Expected an operator".to_owned(),
+            position,
+        }),
     }
 }
 
 fn parse_prim1<'a>(
     operator: ast::Op1,
+    position: Position,
     rest: &mut impl Iterator<Item = &'a Expr>, // TODO: I'm not sure why this lifetime annotation is required.
-) -> Result<ast::Expr, String> {
-    let operand = rest.next().ok_or("Missing operand")?;
+) -> Result<ast::Expr, AstPasringError> {
+    let operand = rest.next().ok_or(err("Missing operand", position))?;
     let operand = parse_expr(&operand)?;
     match rest.next() {
         None => Ok(ast::Expr::Prim1(operator, Box::new(operand))),
-        Some(_) => Err("Expected 1 argument. Got at least 2.".to_string()),
+        Some(expr) => Err(err(
+            "Expected 1 argument. Got at least 2.",
+            expr.position.clone(),
+        )),
     }
 }
 
-fn parse_if<'a>(rest: &mut impl Iterator<Item = &'a Expr>) -> Result<ast::Expr, String> {
-    let cond = rest.next().ok_or("Missing condition")?;
+fn parse_if<'a>(
+    rest: &mut impl Iterator<Item = &'a Expr>,
+    position: Position,
+) -> Result<ast::Expr, AstPasringError> {
+    let cond = rest
+        .next()
+        .ok_or(err("Missing condition", position.clone()))?;
     let cond = parse_expr(&cond)?;
 
-    let then = rest.next().ok_or("Missing then")?;
+    let then = rest.next().ok_or(err("Missing 'then'", position.clone()))?;
     let then = parse_expr(&then)?;
 
-    let els = rest.next().ok_or("Missing else")?;
+    let els = rest.next().ok_or(err("Missing 'else'", position))?;
     let els = parse_expr(&els)?;
 
     match rest.next() {
@@ -65,6 +88,16 @@ fn parse_if<'a>(rest: &mut impl Iterator<Item = &'a Expr>) -> Result<ast::Expr, 
             then: Box::new(then),
             els: Box::new(els),
         })),
-        Some(_) => Err("Expected 3 arguments. Got at least 4.".to_string()),
+        Some(expr) => Err(err(
+            "Expected 3 arguments. Got at least 4.",
+            expr.position.clone(),
+        )),
+    }
+}
+
+fn err(msg: &str, position: Position) -> AstPasringError {
+    AstPasringError {
+        msg: msg.to_owned(),
+        position,
     }
 }

@@ -1,18 +1,25 @@
 use std::{iter::Peekable, vec::IntoIter};
 
-use super::tokens::{Token, TokenKind};
+use super::{
+    document::Position,
+    error::SexpParsingError,
+    tokens::{Token, TokenKind},
+};
 
 #[derive(Debug)]
-pub enum Expr {
+pub struct Expr {
+    pub kind: ExprKind,
+    pub position: Position,
+}
+
+#[derive(Debug)]
+pub enum ExprKind {
     Atom(Atom),
     List(List),
 }
 
 #[derive(Debug)]
-pub struct List {
-    pub head: Atom,
-    pub tail: Vec<Expr>,
-}
+pub struct List(pub Vec<Expr>);
 
 #[derive(Debug, PartialEq)]
 pub enum Atom {
@@ -21,115 +28,107 @@ pub enum Atom {
     Boolean(bool),
 }
 
-pub fn parse(tokens: Vec<Token>) -> Result<Expr, String> {
+impl Expr {
+    pub fn int(i: i64, position: Position) -> Expr {
+        Expr {
+            kind: ExprKind::Atom(Atom::Integer(i)),
+            position,
+        }
+    }
+
+    pub fn bool(b: bool, position: Position) -> Expr {
+        Expr {
+            kind: ExprKind::Atom(Atom::Boolean(b)),
+            position,
+        }
+    }
+
+    pub fn symbol(s: &str, position: Position) -> Expr {
+        Expr {
+            kind: ExprKind::Atom(Atom::Symbol(s.to_string())),
+            position,
+        }
+    }
+
+    pub fn list(elems: Vec<Expr>, position: Position) -> Expr {
+        Expr {
+            kind: ExprKind::List(List(elems)),
+            position,
+        }
+    }
+}
+
+type Result<T> = std::result::Result<T, SexpParsingError>;
+
+pub fn parse(tokens: Vec<Token>) -> Result<Expr> {
     // print the tokens for debug
     for token in &tokens {
         println!("{:?}", token);
     }
 
     let mut tokens_iter = tokens.into_iter().peekable();
-    parse_expr(&mut tokens_iter)
+    parse_expr(&mut tokens_iter, Position::zero())
 }
 
-fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
-    match tokens.peek() {
-        None => Err("Unexpected EOF while parsing exprssion".to_string()),
+fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Result<Expr> {
+    match tokens.next() {
+        None => Err(err("Unexpected EOF", position)),
 
         Some(Token { token, position }) => match token {
-            TokenKind::ParenOpen => parse_list(tokens),
-            TokenKind::ParenClose => {
-                Err(format!("Unexpected closing parenthesis at: {:?}", position,))
+            TokenKind::ParenOpen => {
+                parse_list(tokens, position.clone()).map(|list| Expr::list(list, position))
             }
-            TokenKind::Minus => parse_negative_int(tokens),
-            TokenKind::Integer(_) => parse_positive_int(tokens),
-            TokenKind::Symbol(_) => parse_symbol(tokens),
-            TokenKind::Boolean(_) => parse_boolean(tokens),
+            TokenKind::ParenClose => Err(err("Unmatched parenthesis ')'", position)),
+            TokenKind::Minus => parse_negative_int(tokens, position),
+            TokenKind::Integer(i) => Ok(Expr::int(i, position)),
+            TokenKind::Symbol(s) => Ok(Expr::symbol(&s, position)),
+            TokenKind::Boolean(b) => Ok(Expr::bool(b, position)),
         },
     }
 }
 
-fn parse_list(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
-    tokens
-        .next()
-        .ok_or("Expected opening parenthesis. Got EOF instead.")?;
-
-    let head = match tokens.next() {
-        Some(Token { token, position: _ }) => match token {
-            TokenKind::Symbol(s) => Atom::Symbol(s),
-            _ => return Err("Expected operator".to_string()),
-        },
-        None => return Err("Unexpected EOF while parsing list".to_string()),
-    };
-    let tail = parse_list_rest(tokens)?;
-
-    Ok(Expr::List(List { head, tail }))
-}
-
-fn parse_list_rest(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Vec<Expr>, String> {
+fn parse_list(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Result<Vec<Expr>> {
     let mut list = vec![];
-    while let Some(Token { token, position: _ }) = tokens.peek() {
+    while let Some(Token { token, position }) = tokens.peek() {
         match token {
             TokenKind::ParenClose => {
                 tokens.next();
                 return Ok(list);
             }
-            _ => match parse_expr(tokens) {
-                Ok(expr) => list.push(expr),
-                Err(e) => return Err(e),
-            },
+            _ => {
+                let position = position.clone();
+                match parse_expr(tokens, position) {
+                    Ok(expr) => list.push(expr),
+                    Err(e) => return Err(e),
+                }
+            }
         }
     }
-    Err("Unexpected EOF while parsing list".to_string())
+    Err(err("Unmatched parenthesis '('", position))
 }
 
-fn parse_symbol(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
+fn parse_negative_int(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Result<Expr> {
     match tokens.next() {
-        None => Err("Unexpected EOF while parsing symbol".to_string()),
+        Some(Token {
+            token: TokenKind::Integer(i),
+            position,
+        }) => Ok(Expr::int(-i, position)),
 
-        Some(Token { token, position }) => match token {
-            TokenKind::Symbol(s) => Ok(Expr::Atom(Atom::Symbol(s))),
-            _ => Err(format!("Unexpected token at: {:?}", position)),
-        },
+        Some(Token { token, position }) => Err(err(
+            &format!("Expected an integer. Got {:?}", token),
+            position,
+        )),
+
+        None => Err(err(
+            "Expected an integer after minus sign. Got EOF instead.",
+            position,
+        )),
     }
 }
 
-fn parse_positive_int(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
-    match tokens.next() {
-        None => Err("Unexpected EOF while parsing positive int".to_string()),
-
-        Some(Token { token, position }) => match token {
-            TokenKind::Integer(i) => Ok(Expr::Atom(Atom::Integer(i))),
-            _ => Err(format!("Unexpected token at: {:?}", position)),
-        },
-    }
-}
-
-fn parse_negative_int(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
-    let Token { token, position } = tokens
-        .next()
-        .ok_or("Unexpected EOF while parsing negative int")?;
-
-    if token != TokenKind::Minus {
-        return Err(format!("Unexpected token '{:?}' at: {:?}", token, position));
-    }
-
-    let Token { token, position } = tokens
-        .next()
-        .ok_or("Unexpected EOF while parsing negative int")?;
-
-    match token {
-        TokenKind::Integer(i) => Ok(Expr::Atom(Atom::Integer(-i))),
-        _ => Err(format!("Unexpected token at: {:?}", position)),
-    }
-}
-
-fn parse_boolean(tokens: &mut Peekable<IntoIter<Token>>) -> Result<Expr, String> {
-    match tokens.next() {
-        None => Err("Unexpected EOF while parsing boolean".to_string()),
-
-        Some(Token { token, position }) => match token {
-            TokenKind::Boolean(b) => Ok(Expr::Atom(Atom::Boolean(b))),
-            _ => Err(format!("Unexpected token at: {:?}", position)),
-        },
+fn err(msg: &str, position: Position) -> SexpParsingError {
+    SexpParsingError {
+        msg: msg.to_owned(),
+        position,
     }
 }

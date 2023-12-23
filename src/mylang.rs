@@ -1,15 +1,18 @@
 pub mod ast;
+mod char_positions;
 pub mod compiler;
+mod data_type;
+pub mod document;
+mod error;
 pub mod lexer;
 pub mod parser;
 pub mod s_expression;
 mod tokens;
-mod document;
-mod data_type;
-mod char_positions;
 
-pub fn parse(source: &str) -> Result<ast::Program, String> {
+pub use error::ParserError;
+
+pub fn parse(source: &str) -> Result<ast::Program, ParserError> {
     let tokens = lexer::tokenize(source)?;
     let expr = s_expression::parse(tokens)?;
-    parser::parse(&expr)
+    parser::parse(&expr).or_else(|err| Err(ParserError::from(err)))
 }
