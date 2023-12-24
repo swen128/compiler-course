@@ -27,6 +27,10 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Global { name } => format!("\tglobal {}", name),
         Statement::Label { name } => format!("{}:", print_label(name, context)),
         Statement::Mov { dest, src } => print_mov(dest, src),
+        Statement::And { dest, src } => print_and(dest, src),
+        Statement::Xor { dest, src } => print_xor(dest, src),
+        Statement::Sar { dest, src } => print_sar(dest, src),
+        Statement::Sal { dest, src } => print_sal(dest, src),
         Statement::Cmp { dest, src } => print_cmp(dest, src),
         Statement::Cmove { dest, src } => print_cmove(dest, src),
         Statement::Je { label } => format!("\tje {}", print_label(label, context)),
@@ -42,6 +46,22 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
 
 fn print_mov(dest: &Operand, src: &Operand) -> String {
     format!("\tmov {}, {}", print_operand(dest), print_operand(src))
+}
+
+fn print_and(dest: &Operand, src: &Operand) -> String {
+    format!("\tand {}, {}", print_operand(dest), print_operand(src))
+}
+
+fn print_xor(dest: &Operand, src: &Operand) -> String {
+    format!("\txor {}, {}", print_operand(dest), print_operand(src))
+}
+
+fn print_sar(dest: &Operand, src: &Operand) -> String {
+    format!("\tsar {}, {}", print_operand(dest), print_operand(src))
+}
+
+fn print_sal(dest: &Operand, src: &Operand) -> String {
+    format!("\tsal {}, {}", print_operand(dest), print_operand(src))
 }
 
 fn print_cmp(dest: &Operand, src: &Operand) -> String {

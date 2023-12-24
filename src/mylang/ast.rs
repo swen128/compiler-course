@@ -16,6 +16,7 @@ pub struct If {
 pub enum Lit {
     Int(i64),
     Bool(bool),
+    Char(char),
 }
 
 #[derive(Debug)]
@@ -23,6 +24,9 @@ pub enum Op1 {
     Add1,
     Sub1,
     IsZero,
+    IsChar,
+    IntToChar,
+    CharToInt,
 }
 
 #[derive(Debug)]

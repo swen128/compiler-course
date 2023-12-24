@@ -58,7 +58,7 @@ fn take_first_token(
         '(' => Ok(TokenKind::ParenOpen),
         ')' => Ok(TokenKind::ParenClose),
         '-' => Ok(TokenKind::Minus),
-        '#' => take_boolean_token(tail),
+        '#' => take_hash_token(tail),
         '0'..='9' => Ok(take_int_token(head, tail)),
         _ if is_symbol_char(head) => Ok(take_symbol_token(head, tail)),
         _ => Err(InvalidCharacter {}),
@@ -93,10 +93,14 @@ fn take_symbol_token(head: &char, chars: &mut Peekable<CharPositions>) -> TokenK
     TokenKind::Symbol(symbol)
 }
 
-fn take_boolean_token(chars: &mut Peekable<CharPositions>) -> Result<TokenKind, InvalidCharacter> {
+fn take_hash_token(chars: &mut Peekable<CharPositions>) -> Result<TokenKind, InvalidCharacter> {
     match chars.next() {
         Some((_, 't')) => Ok(TokenKind::Boolean(true)),
         Some((_, 'f')) => Ok(TokenKind::Boolean(false)),
+        Some((_, '\\')) => match chars.next() {
+            Some((_, c)) => Ok(TokenKind::Character(c)),
+            None => Err(InvalidCharacter {}),
+        },
         _ => Err(InvalidCharacter {}),
     }
 }

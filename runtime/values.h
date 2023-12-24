@@ -11,7 +11,10 @@ typedef enum type_t {
   /* immediates */
   T_INT,
   T_BOOL,
+  T_CHAR,
 } type_t;
+
+typedef uint32_t val_char_t;
 
 /* return the type of x */
 type_t val_typeof(val_t x);
@@ -22,8 +25,12 @@ type_t val_typeof(val_t x);
  * The behavior of unwrap functions are undefined on type mismatch.
  */
 int64_t val_unwrap_int(val_t x);
+val_t val_wrap_int(int64_t i);
 
 int val_unwrap_bool(val_t x);
 val_t val_wrap_bool(int b);
+
+val_char_t val_unwrap_char(val_t x);
+val_t val_wrap_char(val_char_t b);
 
 #endif

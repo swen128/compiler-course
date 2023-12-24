@@ -84,6 +84,38 @@ fn if_non_boolean() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn is_char() {
+    let input = "(char? #\\a)";
+    let result = run(input).unwrap();
+    let expected = "#t";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_not_char() {
+    let input = "(char? 42)";
+    let result = run(input).unwrap();
+    let expected = "#f";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn int_to_char() {
+    let input = "(integer->char 97)";
+    let result = run(input).unwrap();
+    let expected = "#\\a";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn char_to_int() {
+    let input = "(char->integer #\\a)";
+    let result = run(input).unwrap();
+    let expected = "97";
+    assert_eq!(result, expected);
+}
+
 pub fn run(source: &str) -> Result<String, ParserError> {
     use std::process::Command;
 

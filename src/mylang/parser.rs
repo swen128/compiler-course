@@ -20,6 +20,7 @@ fn parse_literal(atom: &Atom, position: Position) -> Result<ast::Expr, AstPasrin
     match atom {
         Atom::Integer(n) => Ok(ast::Expr::Lit(ast::Lit::Int(*n))),
         Atom::Boolean(b) => Ok(ast::Expr::Lit(ast::Lit::Bool(*b))),
+        Atom::Character(c) => Ok(ast::Expr::Lit(ast::Lit::Char(*c))),
         Atom::Symbol(_) => Err(err(
             &format!("Expected a literal. Got a symbol: {:?}", atom),
             position.clone(),
@@ -38,6 +39,9 @@ fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringEr
             "add1" => parse_prim1(ast::Op1::Add1, position, &mut elems),
             "sub1" => parse_prim1(ast::Op1::Sub1, position, &mut elems),
             "zero?" => parse_prim1(ast::Op1::IsZero, position, &mut elems),
+            "char?" => parse_prim1(ast::Op1::IsChar, position, &mut elems),
+            "integer->char" => parse_prim1(ast::Op1::IntToChar, position, &mut elems),
+            "char->integer" => parse_prim1(ast::Op1::CharToInt, position, &mut elems),
             "if" => parse_if(&mut elems, position),
             _ => Err(AstPasringError {
                 msg: format!("Unknown operator: {}", s),

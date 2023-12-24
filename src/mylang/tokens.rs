@@ -8,6 +8,7 @@ pub enum TokenKind {
     Integer(i64),
     Symbol(String),
     Boolean(bool),
+    Character(char),
 }
 
 #[derive(Debug)]
