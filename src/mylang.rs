@@ -1,5 +1,4 @@
 pub mod ast;
-mod char_positions;
 pub mod compiler;
 mod data_type;
 pub mod document;
@@ -7,7 +6,6 @@ mod error;
 pub mod lexer;
 pub mod parser;
 pub mod s_expression;
-mod tokens;
 
 pub use error::ParserError;
 

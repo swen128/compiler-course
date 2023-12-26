@@ -27,7 +27,7 @@ fn invalid_syntax() {
         Ok(_) => panic!("Expected a parser error."),
         
         Err(ParserError::AstPasringError(err)) => {
-            assert_eq!(err.position, Position::new(0, 1));
+            assert_eq!(err.position, Position::new(1));
         },
 
         Err(err) => {

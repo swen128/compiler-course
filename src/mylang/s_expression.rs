@@ -3,7 +3,7 @@ use std::{iter::Peekable, vec::IntoIter};
 use super::{
     document::Position,
     error::SexpParsingError,
-    tokens::{Token, TokenKind},
+    lexer::{Token, TokenKind},
 };
 
 #[derive(Debug)]
