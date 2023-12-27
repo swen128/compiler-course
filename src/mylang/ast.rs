@@ -37,5 +37,4 @@ pub struct Program {
 #[derive(Debug)]
 pub enum Operator {
     Op1(Op1),
-    IfZero,
 }
