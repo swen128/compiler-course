@@ -12,6 +12,8 @@ typedef enum type_t {
   T_INT,
   T_BOOL,
   T_CHAR,
+  T_VOID,
+  T_EOF,
 } type_t;
 
 typedef uint32_t val_char_t;
@@ -32,5 +34,10 @@ val_t val_wrap_bool(int b);
 
 val_char_t val_unwrap_char(val_t x);
 val_t val_wrap_char(val_char_t b);
+
+val_t val_wrap_byte(int c);
+
+val_t val_wrap_void(void);
+val_t val_wrap_eof(void);
 
 #endif

@@ -21,10 +21,10 @@ fn parse_literal(atom: &Atom, position: Position) -> Result<ast::Expr, AstPasrin
         Atom::Integer(n) => Ok(ast::Expr::Lit(ast::Lit::Int(*n))),
         Atom::Boolean(b) => Ok(ast::Expr::Lit(ast::Lit::Bool(*b))),
         Atom::Character(c) => Ok(ast::Expr::Lit(ast::Lit::Char(*c))),
-        Atom::Symbol(_) => Err(err(
-            &format!("Expected a literal. Got a symbol: {:?}", atom),
-            position.clone(),
-        )),
+        Atom::Symbol(s) => match s.as_str() {
+            "eof" => Ok(ast::Expr::Eof),
+            _ => Err(err(&format!("Unknown symbol: {}", s), position.clone())),
+        },
     }
 }
 
@@ -42,6 +42,11 @@ fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringEr
             "char?" => parse_prim1(ast::Op1::IsChar, position, &mut elems),
             "integer->char" => parse_prim1(ast::Op1::IntToChar, position, &mut elems),
             "char->integer" => parse_prim1(ast::Op1::CharToInt, position, &mut elems),
+            "eof-object?" => parse_prim1(ast::Op1::IsEof, position, &mut elems),
+            "write-byte" => parse_prim1(ast::Op1::WriteByte, position, &mut elems),
+            "read-byte" => parse_prim0(ast::Op0::ReadByte, position, &mut elems),
+            "peek-byte" => parse_prim0(ast::Op0::PeekByte, position, &mut elems),
+            "begin" => parse_begin(&mut elems, position),
             "if" => parse_if(&mut elems, position),
             _ => Err(AstPasringError {
                 msg: format!("Unknown operator: {}", s),
@@ -52,6 +57,20 @@ fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringEr
             msg: "Expected an operator".to_owned(),
             position,
         }),
+    }
+}
+
+fn parse_prim0<'a>(
+    operator: ast::Op0,
+    _position: Position,
+    rest: &mut impl Iterator<Item = &'a Expr>,
+) -> Result<ast::Expr, AstPasringError> {
+    match rest.next() {
+        None => Ok(ast::Expr::Prim0(operator)),
+        Some(expr) => Err(err(
+            "Expected 0 arguments. Got at least 1.",
+            expr.position.clone(),
+        )),
     }
 }
 
@@ -66,6 +85,29 @@ fn parse_prim1<'a>(
         None => Ok(ast::Expr::Prim1(operator, Box::new(operand))),
         Some(expr) => Err(err(
             "Expected 1 argument. Got at least 2.",
+            expr.position.clone(),
+        )),
+    }
+}
+
+fn parse_begin<'a>(
+    rest: &mut impl Iterator<Item = &'a Expr>,
+    position: Position,
+) -> Result<ast::Expr, AstPasringError> {
+    let first = rest
+        .next()
+        .ok_or(err("Missing first argument", position.clone()))?;
+    let first = parse_expr(&first)?;
+
+    let second = rest
+        .next()
+        .ok_or(err("Missing second argument", position.clone()))?;
+    let second = parse_expr(&second)?;
+
+    match rest.next() {
+        None => Ok(ast::Expr::Begin(Box::new(first), Box::new(second))),
+        Some(expr) => Err(err(
+            "Expected 2 arguments. Got at least 3.",
             expr.position.clone(),
         )),
     }

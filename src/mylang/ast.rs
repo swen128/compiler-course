@@ -1,7 +1,10 @@
 #[derive(Debug)]
 pub enum Expr {
+    Eof,
     Lit(Lit),
+    Prim0(Op0),
     Prim1(Op1, Box<Expr>),
+    Begin(Box<Expr>, Box<Expr>),
     If(If),
 }
 
@@ -20,13 +23,26 @@ pub enum Lit {
 }
 
 #[derive(Debug)]
+pub enum Op0 {
+    ReadByte,
+    PeekByte,
+}
+
+#[derive(Debug)]
 pub enum Op1 {
     Add1,
     Sub1,
     IsZero,
     IsChar,
+    IsEof,
     IntToChar,
     CharToInt,
+    WriteByte,
+}
+
+#[derive(Debug)]
+pub enum Op2 {
+    Begin,
 }
 
 #[derive(Debug)]

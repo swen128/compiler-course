@@ -1,5 +1,6 @@
 pub enum Statement {
     Global { name: String },
+    Extern { name: String },
     Label { name: String },
     Mov { dest: Operand, src: Operand },
     And { dest: Operand, src: Operand },
@@ -27,6 +28,8 @@ pub enum Operand {
 pub enum Register {
     RAX,
     RBX,
+    RDI,
+    RSP,
     R1,
     R2,
     R3,

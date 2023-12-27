@@ -25,6 +25,7 @@ pub fn print(program: &Program, context: &CompilationContext) -> String {
 fn print_statement(statement: &Statement, context: &CompilationContext) -> String {
     match statement {
         Statement::Global { name } => format!("\tglobal {}", name),
+        Statement::Extern { name } => format!("\textern {}", name),
         Statement::Label { name } => format!("{}:", print_label(name, context)),
         Statement::Mov { dest, src } => print_mov(dest, src),
         Statement::And { dest, src } => print_and(dest, src),
@@ -107,6 +108,8 @@ fn print_register(register: &Register) -> String {
     match register {
         Register::RAX => "rax".to_string(),
         Register::RBX => "rbx".to_string(),
+        Register::RDI => "rdi".to_string(),
+        Register::RSP => "rsp".to_string(),
         Register::R1 => "r1".to_string(),
         Register::R2 => "r2".to_string(),
         Register::R3 => "r3".to_string(),

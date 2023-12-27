@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use compiler_course::{compile, ParserError, Position};
 
 #[test]
@@ -22,17 +20,17 @@ fn it_adds_and_subtracts() {
 fn invalid_syntax() {
     let input = "((add1 (sub1 (add1 42))))";
     let result = run(input);
-    
+
     match result {
         Ok(_) => panic!("Expected a parser error."),
-        
+
         Err(ParserError::AstPasringError(err)) => {
             assert_eq!(err.position, Position::new(1));
-        },
+        }
 
         Err(err) => {
             panic!("Expected a AST parsing error. Got: {:?}", err);
-        },
+        }
     }
 }
 
@@ -116,8 +114,51 @@ fn char_to_int() {
     assert_eq!(result, expected);
 }
 
-pub fn run(source: &str) -> Result<String, ParserError> {
-    use std::process::Command;
+#[test]
+fn write_byte() {
+    let input = "(write-byte 97)";
+    let result = run(input).unwrap();
+    let expected = "a";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn begin() {
+    let input = "(begin (write-byte 97) (write-byte 98))";
+    let result = run(input).unwrap();
+    let expected = "ab";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn read_void() {
+    let input = "(read-byte)";
+    let result = run(input).unwrap();
+    let expected = "";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn echo_back() {
+    let source = "(write-byte (read-byte))";
+    let input = "abc";
+    let result = run_with_stdin(source, input).unwrap();
+    let expected = "a";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn peek_byte() {
+    let source = "(begin (write-byte (peek-byte)) (write-byte (peek-byte)))";
+    let input = "abc";
+    let result = run_with_stdin(source, input).unwrap();
+    let expected = "aa";
+    assert_eq!(result, expected);
+}
+
+fn run_with_stdin(source: &str, input: &str) -> Result<String, ParserError> {
+    use std::process::{Command, Stdio};
+    use std::io::Write;
 
     let asm = compile(source)?;
 
@@ -141,10 +182,33 @@ pub fn run(source: &str) -> Result<String, ParserError> {
         .output()
         .expect("failed to execute process");
 
-    let mut command = std::process::Command::new(&bin);
-    let output = command.output().expect("failed to execute process");
+    let mut command = Command::new(&bin);
+    let mut child = command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("failed to execute process");
+
+    child
+        .stdin
+        .as_mut()
+        .take()
+        .expect("Failed to open stdin")
+        .write_all(input.as_bytes())
+        .expect("Failed to write to stdin");
+
+    let output = child.wait_with_output().expect("failed to execute process");
+
+    if !output.status.success() {
+        panic!("process failed with the output: {:?}", output);
+    }
+
     let stdout = String::from_utf8(output.stdout).expect("invalid utf8");
     Ok(stdout)
+}
+
+fn run(source: &str) -> Result<String, ParserError> {
+    run_with_stdin(source, "")
 }
 
 fn hash_str(str: &str) -> String {

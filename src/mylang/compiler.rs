@@ -1,5 +1,5 @@
 use super::ast;
-use super::data_type::Value;
+use super::data_type::{Value, CHAR_SHIFT, INT_SHIFT, MASK_CHAR, TYPE_CHAR};
 use crate::a86::ast::*;
 
 struct Compiler {
@@ -23,27 +23,46 @@ pub fn compile(program: ast::Program) -> Program {
         Statement::Global {
             name: "entry".to_string(),
         },
+        Statement::Extern {
+            name: "read_byte".to_string(),
+        },
+        Statement::Extern {
+            name: "peek_byte".to_string(),
+        },
+        Statement::Extern {
+            name: "write_byte".to_string(),
+        },
         Statement::Label {
             name: "entry".to_string(),
         },
+        Statement::Sub {
+            dest: Operand::Register(Register::RSP),
+            src: Operand::Immediate(8),
+        },
     ];
     statements.extend(compile_expr(program.expr, &mut compiler));
+    statements.push(Statement::Add {
+        dest: Operand::Register(Register::RSP),
+        src: Operand::Immediate(8),
+    });
     statements.push(Statement::Ret);
     Program { statements }
 }
 
 fn compile_expr(expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
     match expr {
+        ast::Expr::Eof => compile_eof(),
+
         ast::Expr::Lit(lit) => compile_literal(lit),
 
-        ast::Expr::Prim1(op, expr) => match op {
-            ast::Op1::Add1 => compile_add1(*expr, compiler),
-            ast::Op1::Sub1 => compile_sub1(*expr, compiler),
-            ast::Op1::IsZero => compile_is_zero(*expr, compiler),
-            ast::Op1::IsChar => compile_is_char(*expr, compiler),
-            ast::Op1::IntToChar => compile_int_to_char(*expr, compiler),
-            ast::Op1::CharToInt => compile_char_to_int(*expr, compiler),
+        ast::Expr::Prim0(op) => match op {
+            ast::Op0::ReadByte => compile_read_byte(),
+            ast::Op0::PeekByte => compile_peek_byte(),
         },
+
+        ast::Expr::Prim1(op, expr) => compile_prim1(op, *expr, compiler),
+
+        ast::Expr::Begin(first, second) => compile_begin(*first, *second, compiler),
 
         ast::Expr::If(if_zero) => compile_if_expr(if_zero, compiler),
     }
@@ -51,97 +70,122 @@ fn compile_expr(expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
 
 fn compile_literal(lit: ast::Lit) -> Vec<Statement> {
     match lit {
-        ast::Lit::Int(i) => {
-            vec![Statement::Mov {
-                dest: Operand::Register(Register::RAX),
-                src: Operand::Immediate(value_to_bits(Value::Int(i))),
-            }]
-        }
-        ast::Lit::Bool(b) => {
-            vec![Statement::Mov {
-                dest: Operand::Register(Register::RAX),
-                src: Operand::Immediate(value_to_bits(Value::Boolean(b))),
-            }]
-        }
-        ast::Lit::Char(c) => {
-            vec![Statement::Mov {
-                dest: Operand::Register(Register::RAX),
-                src: Operand::Immediate(value_to_bits(Value::Char(c))),
-            }]
-        }
+        ast::Lit::Int(i) => compile_value(Value::Int(i)),
+        ast::Lit::Bool(b) => compile_value(Value::Boolean(b)),
+        ast::Lit::Char(c) => compile_value(Value::Char(c)),
     }
 }
 
-fn compile_add1(child: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
-    let mut statements = compile_expr(child, compiler);
-    statements.push(Statement::Add {
+fn compile_eof() -> Vec<Statement> {
+    compile_value(Value::Eof)
+}
+
+fn compile_value(value: Value) -> Vec<Statement> {
+    vec![Statement::Mov {
         dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(value_to_bits(Value::Int(1))),
-    });
+        src: Operand::Immediate(value.encode()),
+    }]
+}
+
+fn compile_read_byte() -> Vec<Statement> {
+    vec![Statement::Call {
+        label: "read_byte".to_string(),
+    }]
+}
+
+fn compile_peek_byte() -> Vec<Statement> {
+    vec![Statement::Call {
+        label: "peek_byte".to_string(),
+    }]
+}
+
+fn compile_prim1(op: ast::Op1, expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
+    let mut statements = compile_expr(expr, compiler);
+    statements.extend(compile_op1(op));
     statements
 }
 
-fn compile_sub1(child: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
-    let mut statements = compile_expr(child, compiler);
-    statements.push(Statement::Sub {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(value_to_bits(Value::Int(1))),
-    });
-    statements
-}
+fn compile_op1(op: ast::Op1) -> Vec<Statement> {
+    match op {
+        ast::Op1::Add1 => vec![Statement::Add {
+            dest: Operand::Register(Register::RAX),
+            src: Operand::Immediate(Value::Int(1).encode()),
+        }],
 
-fn compile_is_zero(child: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
-    let mut statements = compile_expr(child, compiler);
-    statements.push(Statement::Cmp {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(value_to_bits(Value::Int(0))),
-    });
-    statements.extend(if_equal());
-    statements
-}
+        ast::Op1::Sub1 => vec![Statement::Sub {
+            dest: Operand::Register(Register::RAX),
+            src: Operand::Immediate(Value::Int(1).encode()),
+        }],
 
-fn compile_is_char(child: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
-    let mut statements = compile_expr(child, compiler);
-    statements.push(Statement::And {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(mask_char),
-    });
-    statements.push(Statement::Cmp {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(type_char),
-    });
-    statements.extend(if_equal());
-    statements
-}
+        ast::Op1::IsZero => {
+            let mut statements = vec![Statement::Cmp {
+                dest: Operand::Register(Register::RAX),
+                src: Operand::Immediate(Value::Int(0).encode()),
+            }];
+            statements.extend(if_equal());
+            statements
+        }
 
-fn compile_char_to_int(child: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
-    let mut statements = compile_expr(child, compiler);
-    statements.push(Statement::Sar {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(char_shift),
-    });
-    statements.push(Statement::Sal {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(int_shift),
-    });
-    statements
-}
+        ast::Op1::IsChar => {
+            let mut statements = vec![
+                Statement::And {
+                    dest: Operand::Register(Register::RAX),
+                    src: Operand::Immediate(MASK_CHAR),
+                },
+                Statement::Cmp {
+                    dest: Operand::Register(Register::RAX),
+                    src: Operand::Immediate(TYPE_CHAR),
+                },
+            ];
+            statements.extend(if_equal());
+            statements
+        }
 
-fn compile_int_to_char(child: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
-    let mut statements = compile_expr(child, compiler);
-    statements.push(Statement::Sar {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(int_shift),
-    });
-    statements.push(Statement::Sal {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(char_shift),
-    });
-    statements.push(Statement::Xor {
-        dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(type_char),
-    });
-    statements
+        ast::Op1::IsEof => {
+            let mut statements = vec![Statement::Cmp {
+                dest: Operand::Register(Register::RAX),
+                src: Operand::Immediate(Value::Eof.encode()),
+            }];
+            statements.extend(if_equal());
+            statements
+        }
+
+        ast::Op1::CharToInt => vec![
+            Statement::Sar {
+                dest: Operand::Register(Register::RAX),
+                src: Operand::Immediate(CHAR_SHIFT),
+            },
+            Statement::Sal {
+                dest: Operand::Register(Register::RAX),
+                src: Operand::Immediate(INT_SHIFT),
+            },
+        ],
+
+        ast::Op1::IntToChar => vec![
+            Statement::Sar {
+                dest: Operand::Register(Register::RAX),
+                src: Operand::Immediate(INT_SHIFT),
+            },
+            Statement::Sal {
+                dest: Operand::Register(Register::RAX),
+                src: Operand::Immediate(CHAR_SHIFT),
+            },
+            Statement::Xor {
+                dest: Operand::Register(Register::RAX),
+                src: Operand::Immediate(TYPE_CHAR),
+            },
+        ],
+
+        ast::Op1::WriteByte => vec![
+            Statement::Mov {
+                dest: Operand::Register(Register::RDI),
+                src: Operand::Register(Register::RAX),
+            },
+            Statement::Call {
+                label: "write_byte".to_string(),
+            },
+        ],
+    }
 }
 
 /// Set rax to true if the comparison flag is equal.
@@ -149,17 +193,23 @@ fn if_equal() -> Vec<Statement> {
     vec![
         Statement::Mov {
             dest: Operand::Register(Register::RAX),
-            src: Operand::Immediate(value_to_bits(Value::Boolean(false))),
+            src: Operand::Immediate(Value::Boolean(false).encode()),
         },
         Statement::Mov {
             dest: Operand::Register(Register::R9),
-            src: Operand::Immediate(value_to_bits(Value::Boolean(true))),
+            src: Operand::Immediate(Value::Boolean(true).encode()),
         },
         Statement::Cmove {
             dest: Operand::Register(Register::RAX),
             src: Operand::Register(Register::R9),
         },
     ]
+}
+
+fn compile_begin(first: ast::Expr, second: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
+    let mut statements = compile_expr(first, compiler);
+    statements.extend(compile_expr(second, compiler));
+    statements
 }
 
 fn compile_if_expr(if_expr: ast::If, compiler: &mut Compiler) -> Vec<Statement> {
@@ -170,7 +220,7 @@ fn compile_if_expr(if_expr: ast::If, compiler: &mut Compiler) -> Vec<Statement> 
     let mut statements = compile_expr(*if_expr.cond, compiler);
     statements.push(Statement::Cmp {
         dest: Operand::Register(Register::RAX),
-        src: Operand::Immediate(value_to_bits(Value::Boolean(false))),
+        src: Operand::Immediate(Value::Boolean(false).encode()),
     });
     statements.push(Statement::Je {
         label: else_label.clone(),
@@ -188,26 +238,3 @@ fn compile_if_expr(if_expr: ast::If, compiler: &mut Compiler) -> Vec<Statement> 
     });
     statements
 }
-
-/// Converts a value to a bit representation.
-/// - Integers have 0b0 as the last bit; the other bits describe the integer.
-/// - Character have 0b01 as the last bits; the other bits describe the character.
-/// - True is 0b011 and False is 0b111.
-fn value_to_bits(value: Value) -> i64 {
-    match value {
-        Value::Int(i) => i << int_shift,
-        Value::Boolean(b) => {
-            if b {
-                0b011
-            } else {
-                0b111
-            }
-        }
-        Value::Char(c) => ((c as i64) << char_shift) + type_char,
-    }
-}
-
-const int_shift: i64 = 1;
-const char_shift: i64 = 2;
-const mask_char: i64 = 0b11;
-const type_char: i64 = 0b01;
