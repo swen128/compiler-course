@@ -22,4 +22,6 @@ impl Value {
 pub const INT_SHIFT: i64 = 1;
 pub const CHAR_SHIFT: i64 = 2;
 pub const TYPE_CHAR: i64 = 0b01;
+pub const TYPE_INT: i64 = 0b0;
 pub const MASK_CHAR: i64 = 0b11;
+pub const MASK_INT: i64 = 0b1;

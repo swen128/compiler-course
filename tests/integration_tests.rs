@@ -24,7 +24,7 @@ fn invalid_syntax() {
     match result {
         Ok(_) => panic!("Expected a parser error."),
 
-        Err(ParserError::AstPasringError(err)) => {
+        Err(Error::ParserError(ParserError::AstPasringError(err))) => {
             assert_eq!(err.position, Position::new(1));
         }
 
@@ -156,9 +156,30 @@ fn peek_byte() {
     assert_eq!(result, expected);
 }
 
-fn run_with_stdin(source: &str, input: &str) -> Result<String, ParserError> {
-    use std::process::{Command, Stdio};
+#[test]
+fn add_invalid_type() {
+    let input = "(add1 #\\a)";
+    let result = run(input).unwrap_err();
+    assert_eq!(result, Error::RuntimeError);
+}
+
+#[test]
+fn sub_invalid_type() {
+    let input = "(sub1 #\\a)";
+    let result = run(input).unwrap_err();
+    assert_eq!(result, Error::RuntimeError);
+}
+
+#[test]
+fn invalid_codepoint_to_char() {
+    let input = "(integer->char 99999999)";
+    let result = run(input).unwrap_err();
+    assert_eq!(result, Error::RuntimeError);
+}
+
+fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
+    use std::process::{Command, Stdio};
 
     let asm = compile(source)?;
 
@@ -199,6 +220,10 @@ fn run_with_stdin(source: &str, input: &str) -> Result<String, ParserError> {
 
     let output = child.wait_with_output().expect("failed to execute process");
 
+    if output.status.code() == Some(1) {
+        return Err(Error::RuntimeError);
+    }
+
     if !output.status.success() {
         panic!("process failed with the output: {:?}", output);
     }
@@ -207,7 +232,7 @@ fn run_with_stdin(source: &str, input: &str) -> Result<String, ParserError> {
     Ok(stdout)
 }
 
-fn run(source: &str) -> Result<String, ParserError> {
+fn run(source: &str) -> Result<String, Error> {
     run_with_stdin(source, "")
 }
 
@@ -218,4 +243,16 @@ fn hash_str(str: &str) -> String {
     let mut hasher = DefaultHasher::new();
     str.hash(&mut hasher);
     format!("{:x}", hasher.finish())
+}
+
+#[derive(Debug, PartialEq)]
+enum Error {
+    ParserError(ParserError),
+    RuntimeError,
+}
+
+impl From<ParserError> for Error {
+    fn from(err: ParserError) -> Self {
+        Error::ParserError(err)
+    }
 }

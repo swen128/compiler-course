@@ -1,6 +1,10 @@
 use super::ast;
 use super::data_type::{Value, CHAR_SHIFT, INT_SHIFT, MASK_CHAR, TYPE_CHAR};
 use crate::a86::ast::*;
+use crate::mylang::data_type::{MASK_INT, TYPE_INT};
+
+const RAX: Operand = Operand::Register(Register::RAX);
+const R9: Operand = Operand::Register(Register::R9);
 
 struct Compiler {
     last_label_id: usize,
@@ -32,6 +36,9 @@ pub fn compile(program: ast::Program) -> Program {
         Statement::Extern {
             name: "write_byte".to_string(),
         },
+        Statement::Extern {
+            name: "raise_error".to_string(),
+        },
         Statement::Label {
             name: "entry".to_string(),
         },
@@ -46,6 +53,12 @@ pub fn compile(program: ast::Program) -> Program {
         src: Operand::Immediate(8),
     });
     statements.push(Statement::Ret);
+    statements.push(Statement::Label {
+        name: "err".to_string(),
+    });
+    statements.push(Statement::Call {
+        label: "raise_error".to_string(),
+    });
     Program { statements }
 }
 
@@ -82,7 +95,7 @@ fn compile_eof() -> Vec<Statement> {
 
 fn compile_value(value: Value) -> Vec<Statement> {
     vec![Statement::Mov {
-        dest: Operand::Register(Register::RAX),
+        dest: RAX,
         src: Operand::Immediate(value.encode()),
     }]
 }
@@ -105,23 +118,33 @@ fn compile_prim1(op: ast::Op1, expr: ast::Expr, compiler: &mut Compiler) -> Vec<
     statements
 }
 
+/// Returns instructions which apply the given unary operator to the value in rax.
 fn compile_op1(op: ast::Op1) -> Vec<Statement> {
     match op {
-        ast::Op1::Add1 => vec![Statement::Add {
-            dest: Operand::Register(Register::RAX),
-            src: Operand::Immediate(Value::Int(1).encode()),
-        }],
+        ast::Op1::Add1 => {
+            let mut statements = assert_int(Register::RAX);
+            statements.push(Statement::Add {
+                dest: RAX,
+                src: Operand::Immediate(Value::Int(1).encode()),
+            });
+            statements
+        }
 
-        ast::Op1::Sub1 => vec![Statement::Sub {
-            dest: Operand::Register(Register::RAX),
-            src: Operand::Immediate(Value::Int(1).encode()),
-        }],
+        ast::Op1::Sub1 => {
+            let mut statements = assert_int(Register::RAX);
+            statements.push(Statement::Sub {
+                dest: RAX,
+                src: Operand::Immediate(Value::Int(1).encode()),
+            });
+            statements
+        }
 
         ast::Op1::IsZero => {
-            let mut statements = vec![Statement::Cmp {
-                dest: Operand::Register(Register::RAX),
+            let mut statements = assert_int(Register::RAX);
+            statements.push(Statement::Cmp {
+                dest: RAX,
                 src: Operand::Immediate(Value::Int(0).encode()),
-            }];
+            });
             statements.extend(if_equal());
             statements
         }
@@ -129,11 +152,11 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
         ast::Op1::IsChar => {
             let mut statements = vec![
                 Statement::And {
-                    dest: Operand::Register(Register::RAX),
+                    dest: RAX,
                     src: Operand::Immediate(MASK_CHAR),
                 },
                 Statement::Cmp {
-                    dest: Operand::Register(Register::RAX),
+                    dest: RAX,
                     src: Operand::Immediate(TYPE_CHAR),
                 },
             ];
@@ -143,65 +166,71 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
 
         ast::Op1::IsEof => {
             let mut statements = vec![Statement::Cmp {
-                dest: Operand::Register(Register::RAX),
+                dest: RAX,
                 src: Operand::Immediate(Value::Eof.encode()),
             }];
             statements.extend(if_equal());
             statements
         }
 
-        ast::Op1::CharToInt => vec![
-            Statement::Sar {
-                dest: Operand::Register(Register::RAX),
+        ast::Op1::CharToInt => {
+            let mut statements = assert_char(Register::RAX);
+            statements.push(Statement::Sar {
+                dest: RAX,
                 src: Operand::Immediate(CHAR_SHIFT),
-            },
-            Statement::Sal {
-                dest: Operand::Register(Register::RAX),
+            });
+            statements.push(Statement::Sal {
+                dest: RAX,
                 src: Operand::Immediate(INT_SHIFT),
-            },
-        ],
+            });
+            statements
+        }
 
-        ast::Op1::IntToChar => vec![
-            Statement::Sar {
-                dest: Operand::Register(Register::RAX),
+        ast::Op1::IntToChar => {
+            let mut statements = assert_codepoint();
+            statements.push(Statement::Sar {
+                dest: RAX,
                 src: Operand::Immediate(INT_SHIFT),
-            },
-            Statement::Sal {
-                dest: Operand::Register(Register::RAX),
+            });
+            statements.push(Statement::Sal {
+                dest: RAX,
                 src: Operand::Immediate(CHAR_SHIFT),
-            },
-            Statement::Xor {
-                dest: Operand::Register(Register::RAX),
+            });
+            statements.push(Statement::Xor {
+                dest: RAX,
                 src: Operand::Immediate(TYPE_CHAR),
-            },
-        ],
+            });
+            statements
+        }
 
-        ast::Op1::WriteByte => vec![
-            Statement::Mov {
+        ast::Op1::WriteByte => {
+            let mut statements = assert_byte(Register::RAX);
+            statements.push(Statement::Mov {
                 dest: Operand::Register(Register::RDI),
-                src: Operand::Register(Register::RAX),
-            },
-            Statement::Call {
+                src: RAX,
+            });
+            statements.push(Statement::Call {
                 label: "write_byte".to_string(),
-            },
-        ],
+            });
+            statements
+        }
     }
 }
 
-/// Set rax to true if the comparison flag is equal.
+/// Returns instructions which sets rax to true if the comparison flag is equal.
 fn if_equal() -> Vec<Statement> {
     vec![
         Statement::Mov {
-            dest: Operand::Register(Register::RAX),
+            dest: RAX,
             src: Operand::Immediate(Value::Boolean(false).encode()),
         },
         Statement::Mov {
-            dest: Operand::Register(Register::R9),
+            dest: R9,
             src: Operand::Immediate(Value::Boolean(true).encode()),
         },
         Statement::Cmove {
-            dest: Operand::Register(Register::RAX),
-            src: Operand::Register(Register::R9),
+            dest: RAX,
+            src: R9,
         },
     ]
 }
@@ -219,7 +248,7 @@ fn compile_if_expr(if_expr: ast::If, compiler: &mut Compiler) -> Vec<Statement> 
 
     let mut statements = compile_expr(*if_expr.cond, compiler);
     statements.push(Statement::Cmp {
-        dest: Operand::Register(Register::RAX),
+        dest: RAX,
         src: Operand::Immediate(Value::Boolean(false).encode()),
     });
     statements.push(Statement::Je {
@@ -236,5 +265,110 @@ fn compile_if_expr(if_expr: ast::If, compiler: &mut Compiler) -> Vec<Statement> 
     statements.push(Statement::Label {
         name: end_label.clone(),
     });
+    statements
+}
+
+fn assert_int(register: Register) -> Vec<Statement> {
+    vec![
+        Statement::Mov {
+            dest: R9,
+            src: Operand::Register(register),
+        },
+        Statement::And {
+            dest: R9,
+            src: Operand::Immediate(MASK_INT),
+        },
+        Statement::Cmp {
+            dest: R9,
+            src: Operand::Immediate(TYPE_INT),
+        },
+        Statement::Jne {
+            label: "err".to_string(),
+        },
+    ]
+}
+
+fn assert_char(register: Register) -> Vec<Statement> {
+    vec![
+        Statement::Mov {
+            dest: R9,
+            src: Operand::Register(register),
+        },
+        Statement::And {
+            dest: R9,
+            src: Operand::Immediate(MASK_CHAR),
+        },
+        Statement::Cmp {
+            dest: R9,
+            src: Operand::Immediate(TYPE_CHAR),
+        },
+        Statement::Jne {
+            label: "err".to_string(),
+        },
+    ]
+}
+
+fn assert_codepoint() -> Vec<Statement> {
+    let mut statements = assert_int(Register::RAX);
+
+    // Make sure the value is in the range 0..=0x10FFFF
+    statements.push(Statement::Cmp {
+        dest: RAX,
+        src: Operand::Immediate(Value::Int(0).encode()),
+    });
+    statements.push(Statement::Jl {
+        label: "err".to_string(),
+    });
+    statements.push(Statement::Cmp {
+        dest: RAX,
+        src: Operand::Immediate(Value::Int(0x10FFFF).encode()),
+    });
+    statements.push(Statement::Jg {
+        label: "err".to_string(),
+    });
+
+    // except for the range 55296..=57343.
+    statements.push(Statement::Cmp {
+        dest: RAX,
+        src: Operand::Immediate(Value::Int(55295).encode()),
+    });
+    statements.push(Statement::Jl {
+        label: "ok".to_string(),
+    });
+    statements.push(Statement::Cmp {
+        dest: RAX,
+        src: Operand::Immediate(Value::Int(57344).encode()),
+    });
+    statements.push(Statement::Jg {
+        label: "ok".to_string(),
+    });
+    statements.push(Statement::Jmp {
+        label: "err".to_string(),
+    });
+    statements.push(Statement::Label {
+        name: "ok".to_string(),
+    });
+    statements
+}
+
+fn assert_byte(register: Register) -> Vec<Statement> {
+    let mut statements = assert_int(register);
+
+    // Make sure the value is in the range 0..=255
+    statements.push(Statement::Cmp {
+        dest: R9,
+        src: Operand::Immediate(Value::Int(0).encode()),
+    });
+    statements.push(Statement::Jl {
+        label: "err".to_string(),
+    });
+    statements.push(Statement::Cmp {
+        dest: R9,
+        src: Operand::Immediate(Value::Int(255).encode()),
+    });
+    statements.push(Statement::Jg {
+        label: "err".to_string(),
+    });
+
     statements
 }

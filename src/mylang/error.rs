@@ -1,6 +1,6 @@
 use super::document::Position;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ParserError {
     InvalidToken(InvalidTokenError),
     SexpParsingError(SexpParsingError),
@@ -35,7 +35,7 @@ impl std::fmt::Display for ParserError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct InvalidTokenError {
     pub position: Position,
 }
@@ -48,7 +48,7 @@ impl std::fmt::Display for InvalidTokenError {
 
 impl std::error::Error for InvalidTokenError {}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SexpParsingError {
     pub msg: String,
     pub position: Position,
@@ -62,7 +62,7 @@ impl std::fmt::Display for SexpParsingError {
 
 impl std::error::Error for SexpParsingError {}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct AstPasringError {
     pub msg: String,
     pub position: Position,

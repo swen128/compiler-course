@@ -11,6 +11,9 @@ pub enum Statement {
     Cmove { dest: Operand, src: Operand },
     Jmp { label: String },
     Je { label: String },
+    Jne { label: String },
+    Jg { label: String },
+    Jl { label: String },
     Push { src: Operand },
     Pop { dest: Operand },
     Add { dest: Operand, src: Operand },
@@ -19,12 +22,14 @@ pub enum Statement {
     Ret,
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub enum Operand {
     Memory(String),
     Immediate(i64),
     Register(Register),
 }
 
+#[derive(Debug, PartialEq, Clone)]
 pub enum Register {
     RAX,
     RBX,
