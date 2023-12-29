@@ -130,5 +130,11 @@ fn print_register(register: &Register) -> String {
         Register::R7 => "r7".to_string(),
         Register::R8 => "r8".to_string(),
         Register::R9 => "r9".to_string(),
+        Register::R10 => "r10".to_string(),
+        Register::R11 => "r11".to_string(),
+        Register::R12 => "r12".to_string(),
+        Register::R13 => "r13".to_string(),
+        Register::R14 => "r14".to_string(),
+        Register::R15 => "r15".to_string(),
     }
 }

@@ -193,6 +193,14 @@ fn two_variables() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn write_two_variables() {
+    let input = "(let ((x 97)) (let ((y 98)) (begin (write-byte x) (write-byte y))))";
+    let result = run(input).unwrap();
+    let expected = "ab";
+    assert_eq!(result, expected);
+}
+
 fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
     use std::process::{Command, Stdio};

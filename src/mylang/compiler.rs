@@ -4,7 +4,9 @@ use crate::a86::ast::*;
 use crate::mylang::data_type::{MASK_INT, TYPE_INT};
 
 const RAX: Operand = Operand::Register(Register::RAX);
+const RSP: Operand = Operand::Register(Register::RSP);
 const R9: Operand = Operand::Register(Register::R9);
+const R15: Operand = Operand::Register(Register::R15);
 
 struct Compiler {
     last_label_id: usize,
@@ -74,20 +76,13 @@ pub fn compile(program: ast::Program) -> Program {
         Statement::Label {
             name: "entry".to_string(),
         },
-        Statement::Sub {
-            dest: Operand::Register(Register::RSP),
-            src: Operand::Immediate(8),
-        },
     ];
     statements.extend(compile_expr(program.expr, &mut compiler));
-    statements.push(Statement::Add {
-        dest: Operand::Register(Register::RSP),
-        src: Operand::Immediate(8),
-    });
     statements.push(Statement::Ret);
     statements.push(Statement::Label {
         name: "err".to_string(),
     });
+    statements.extend(pad_stack());
     statements.push(Statement::Call {
         label: "raise_error".to_string(),
     });
@@ -137,15 +132,11 @@ fn compile_value(value: Value) -> Vec<Statement> {
 }
 
 fn compile_read_byte() -> Vec<Statement> {
-    vec![Statement::Call {
-        label: "read_byte".to_string(),
-    }]
+    call("read_byte".to_string())
 }
 
 fn compile_peek_byte() -> Vec<Statement> {
-    vec![Statement::Call {
-        label: "peek_byte".to_string(),
-    }]
+    call("peek_byte".to_string())
 }
 
 fn compile_prim1(op: ast::Op1, expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
@@ -245,9 +236,7 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
                 dest: Operand::Register(Register::RDI),
                 src: RAX,
             });
-            statements.push(Statement::Call {
-                label: "write_byte".to_string(),
-            });
+            statements.extend(call("write_byte".to_string()));
             statements
         }
     }
@@ -435,6 +424,41 @@ fn assert_byte(register: Register) -> Vec<Statement> {
     });
 
     statements
+}
+
+fn call(label: String) -> Vec<Statement> {
+    let mut statements = pad_stack();
+    statements.push(Statement::Call { label });
+    statements.extend(unpad_stack());
+    statements
+}
+
+/// Returns instructions which alligns the stack pointer to a 16-byte boundary.
+/// This must be done before calling an external function.
+/// After the call, the stack must be unaligned using [unpad_stack].
+fn pad_stack() -> Vec<Statement> {
+    vec![
+        Statement::Mov {
+            dest: R15,
+            src: RSP,
+        },
+        Statement::And {
+            dest: R15,
+            src: Operand::Immediate(0b1000),
+        },
+        Statement::Sub {
+            dest: RSP,
+            src: R15,
+        },
+    ]
+}
+
+/// Returns instructions which undo the stack alignment done by [pad_stack].
+fn unpad_stack() -> Vec<Statement> {
+    vec![Statement::Add {
+        dest: RSP,
+        src: R15,
+    }]
 }
 
 #[cfg(test)]
