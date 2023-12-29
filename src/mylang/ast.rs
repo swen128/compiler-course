@@ -4,6 +4,7 @@ pub enum Expr {
     Lit(Lit),
     Prim0(Op0),
     Prim1(Op1, Box<Expr>),
+    Prim2(Op2, Box<Expr>, Box<Expr>),
     Begin(Box<Expr>, Box<Expr>),
     Variable(Variable),
     Let(Let),
@@ -66,15 +67,13 @@ pub enum Op1 {
 
 #[derive(Debug)]
 pub enum Op2 {
-    Begin,
+    Add,
+    Sub,
+    LessThan,
+    Equal,
 }
 
 #[derive(Debug)]
 pub struct Program {
     pub expr: Expr,
-}
-
-#[derive(Debug)]
-pub enum Operator {
-    Op1(Op1),
 }

@@ -34,6 +34,7 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Sal { dest, src } => print_sal(dest, src),
         Statement::Cmp { dest, src } => print_cmp(dest, src),
         Statement::Cmove { dest, src } => print_cmove(dest, src),
+        Statement::Cmovl { dest, src } => print_cmovl(dest, src),
         Statement::Je { label } => format!("\tje {}", print_label(label, context)),
         Statement::Jne { label } => format!("\tjne {}", print_label(label, context)),
         Statement::Jg { label } => format!("\tjg {}", print_label(label, context)),
@@ -74,6 +75,10 @@ fn print_cmp(dest: &Operand, src: &Operand) -> String {
 
 fn print_cmove(dest: &Operand, src: &Operand) -> String {
     format!("\tcmove {}, {}", print_operand(dest), print_operand(src))
+}
+
+fn print_cmovl(dest: &Operand, src: &Operand) -> String {
+    format!("\tcmovl {}, {}", print_operand(dest), print_operand(src))
 }
 
 fn print_add(dest: &Operand, src: &Operand) -> String {

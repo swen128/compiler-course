@@ -18,3 +18,9 @@ impl Position {
         Position { offset }
     }
 }
+
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.offset)
+    }
+}

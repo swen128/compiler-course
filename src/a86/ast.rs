@@ -10,6 +10,7 @@ pub enum Statement {
     Sal { dest: Operand, src: Operand },
     Cmp { dest: Operand, src: Operand },
     Cmove { dest: Operand, src: Operand },
+    Cmovl { dest: Operand, src: Operand },
     Jmp { label: String },
     Je { label: String },
     Jne { label: String },

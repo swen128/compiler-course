@@ -201,6 +201,14 @@ fn write_two_variables() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn add_two_variables() {
+    let input = "(let ((x 42)) (let ((y 1)) (+ x y)))";
+    let result = run(input).unwrap();
+    let expected = "43";
+    assert_eq!(result, expected);
+}
+
 fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
     use std::process::{Command, Stdio};

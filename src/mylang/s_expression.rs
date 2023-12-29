@@ -69,11 +69,6 @@ impl Expr {
 type Result<T> = std::result::Result<T, SexpParsingError>;
 
 pub fn parse(tokens: Vec<Token>) -> Result<Expr> {
-    // print the tokens for debug
-    for token in &tokens {
-        println!("{:?}", token);
-    }
-
     let mut tokens_iter = tokens.into_iter().peekable();
     parse_expr(&mut tokens_iter, Position::zero())
 }

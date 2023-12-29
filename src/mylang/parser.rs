@@ -36,6 +36,9 @@ fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringEr
 
     match &head.kind {
         ExprKind::Atom(Atom::Symbol(s)) => match s.as_str() {
+            "read-byte" => parse_prim0(ast::Op0::ReadByte, position, &mut elems),
+            "peek-byte" => parse_prim0(ast::Op0::PeekByte, position, &mut elems),
+
             "add1" => parse_prim1(ast::Op1::Add1, position, &mut elems),
             "sub1" => parse_prim1(ast::Op1::Sub1, position, &mut elems),
             "zero?" => parse_prim1(ast::Op1::IsZero, position, &mut elems),
@@ -44,8 +47,12 @@ fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringEr
             "char->integer" => parse_prim1(ast::Op1::CharToInt, position, &mut elems),
             "eof-object?" => parse_prim1(ast::Op1::IsEof, position, &mut elems),
             "write-byte" => parse_prim1(ast::Op1::WriteByte, position, &mut elems),
-            "read-byte" => parse_prim0(ast::Op0::ReadByte, position, &mut elems),
-            "peek-byte" => parse_prim0(ast::Op0::PeekByte, position, &mut elems),
+
+            "+" => parse_prim2(ast::Op2::Add, position, &mut elems),
+            "-" => parse_prim2(ast::Op2::Sub, position, &mut elems),
+            "<" => parse_prim2(ast::Op2::LessThan, position, &mut elems),
+            "=" => parse_prim2(ast::Op2::Equal, position, &mut elems),
+
             "begin" => parse_begin(&mut elems, position),
             "if" => parse_if(&mut elems, position),
             "let" => parse_let(&mut elems, position),
@@ -86,6 +93,34 @@ fn parse_prim1<'a>(
         None => Ok(ast::Expr::Prim1(operator, Box::new(operand))),
         Some(expr) => Err(err(
             "Expected 1 argument. Got at least 2.",
+            expr.position.clone(),
+        )),
+    }
+}
+
+fn parse_prim2<'a>(
+    operator: ast::Op2,
+    position: Position,
+    rest: &mut impl Iterator<Item = &'a Expr>,
+) -> Result<ast::Expr, AstPasringError> {
+    let operand_1 = rest
+        .next()
+        .ok_or(err("Missing first operand", position.clone()))?;
+    let operand_1 = parse_expr(&operand_1)?;
+
+    let operand_2 = rest
+        .next()
+        .ok_or(err("Missing second operand", position.clone()))?;
+    let operand_2 = parse_expr(&operand_2)?;
+
+    match rest.next() {
+        None => Ok(ast::Expr::Prim2(
+            operator,
+            Box::new(operand_1),
+            Box::new(operand_2),
+        )),
+        Some(expr) => Err(err(
+            "Got more than 2 arguments for a binary operator.",
             expr.position.clone(),
         )),
     }

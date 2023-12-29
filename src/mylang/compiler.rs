@@ -5,6 +5,7 @@ use crate::mylang::data_type::{MASK_INT, TYPE_INT};
 
 const RAX: Operand = Operand::Register(Register::RAX);
 const RSP: Operand = Operand::Register(Register::RSP);
+const R8: Operand = Operand::Register(Register::R8);
 const R9: Operand = Operand::Register(Register::R9);
 const R15: Operand = Operand::Register(Register::R15);
 
@@ -28,7 +29,7 @@ impl Compiler {
 }
 
 struct VariablesTable {
-    variables: Vec<Variable>,
+    variables: Vec<Option<Variable>>,
 }
 
 /// Keeps track of local variables, mapping them to lexical addresses.
@@ -39,8 +40,16 @@ impl VariablesTable {
         }
     }
 
-    fn push(&mut self, variable: Variable) {
-        self.variables.push(variable);
+    /// Pushes a new variable to the stack.
+    /// This should be called when binding a new variable in the `let` expression.
+    fn push_variable(&mut self, variable: Variable) {
+        self.variables.push(Some(variable));
+    }
+    
+    /// Pushes a new non-variable to the stack.
+    /// This should be called whenever pushing an arbitrary non-variable value to the stack.
+    fn push_non_variable(&mut self) {
+        self.variables.push(None);
     }
 
     fn pop(&mut self) {
@@ -50,7 +59,7 @@ impl VariablesTable {
     fn position(&self, variable: &Variable) -> Option<usize> {
         self.variables
             .iter()
-            .position(|v| v == variable)
+            .position(|option| option.as_ref().is_some_and(|v| v == variable))
             .map(|i| self.variables.len() - i - 1)
     }
 }
@@ -101,6 +110,7 @@ fn compile_expr(expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
         },
 
         ast::Expr::Prim1(op, expr) => compile_prim1(op, *expr, compiler),
+        ast::Expr::Prim2(op, first, second) => compile_prim2(op, *first, *second, compiler),
 
         ast::Expr::Begin(first, second) => compile_begin(*first, *second, compiler),
 
@@ -142,6 +152,26 @@ fn compile_peek_byte() -> Vec<Statement> {
 fn compile_prim1(op: ast::Op1, expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
     let mut statements = compile_expr(expr, compiler);
     statements.extend(compile_op1(op));
+    statements
+}
+
+fn compile_prim2(
+    op: ast::Op2,
+    first: ast::Expr,
+    second: ast::Expr,
+    compiler: &mut Compiler,
+) -> Vec<Statement> {
+    let mut statements = compile_expr(first, compiler);
+    statements.push(Statement::Push {
+        src: Operand::Register(Register::RAX),
+    });
+    compiler.variables_table.push_non_variable();
+    statements.extend(compile_expr(second, compiler));
+    statements.push(Statement::Pop {
+        dest: Operand::Register(Register::R8),
+    });
+    compiler.variables_table.pop();
+    statements.extend(compile_op2(op));
     statements
 }
 
@@ -242,6 +272,43 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
     }
 }
 
+/// Returns instructions which apply the given binary operator to the values in
+/// r8 (first operand) and rax (second operand).
+fn compile_op2(op: ast::Op2) -> Vec<Statement> {
+    match op {
+        ast::Op2::Add => {
+            let mut statements = assert_int(Register::RAX);
+            statements.extend(assert_int(Register::R8));
+            statements.push(Statement::Add { dest: RAX, src: R8 });
+            statements
+        }
+
+        ast::Op2::Sub => {
+            let mut statements = assert_int(Register::RAX);
+            statements.extend(assert_int(Register::R8));
+            statements.push(Statement::Sub { dest: R8, src: RAX });
+            statements.push(Statement::Mov { dest: RAX, src: R8 });
+            statements
+        }
+
+        ast::Op2::Equal => {
+            let mut statements = assert_int(Register::RAX);
+            statements.extend(assert_int(Register::R8));
+            statements.push(Statement::Cmp { dest: RAX, src: R8 });
+            statements.extend(if_equal());
+            statements
+        }
+
+        ast::Op2::LessThan => {
+            let mut statements = assert_int(Register::RAX);
+            statements.extend(assert_int(Register::R8));
+            statements.push(Statement::Cmp { dest: RAX, src: R8 });
+            statements.extend(if_less_than());
+            statements
+        }
+    }
+}
+
 /// Returns instructions which sets rax to true if the comparison flag is equal.
 fn if_equal() -> Vec<Statement> {
     vec![
@@ -254,6 +321,21 @@ fn if_equal() -> Vec<Statement> {
             src: Operand::Immediate(Value::Boolean(true).encode()),
         },
         Statement::Cmove { dest: RAX, src: R9 },
+    ]
+}
+
+/// Returns instructions which sets rax to true if the comparison flag is less
+fn if_less_than() -> Vec<Statement> {
+    vec![
+        Statement::Mov {
+            dest: RAX,
+            src: Operand::Immediate(Value::Boolean(false).encode()),
+        },
+        Statement::Mov {
+            dest: R9,
+            src: Operand::Immediate(Value::Boolean(true).encode()),
+        },
+        Statement::Cmovl { dest: RAX, src: R9 },
     ]
 }
 
@@ -297,7 +379,7 @@ fn compile_let(expr: ast::Let, compiler: &mut Compiler) -> Vec<Statement> {
     statements.push(Statement::Push {
         src: Operand::Register(Register::RAX),
     });
-    compiler.variables_table.push(binding.lhs);
+    compiler.variables_table.push_variable(binding.lhs);
     statements.extend(compile_expr(*body, compiler));
     compiler.variables_table.pop();
 
@@ -468,9 +550,9 @@ mod tests {
     #[test]
     fn variable_position() {
         let mut variables_table = VariablesTable::new();
-        variables_table.push(Variable("a".to_string()));
-        variables_table.push(Variable("b".to_string()));
-        variables_table.push(Variable("c".to_string()));
+        variables_table.push_variable(Variable("a".to_string()));
+        variables_table.push_variable(Variable("b".to_string()));
+        variables_table.push_variable(Variable("c".to_string()));
         variables_table.pop();
         assert_eq!(
             variables_table.position(&Variable("a".to_string())),
