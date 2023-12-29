@@ -56,7 +56,7 @@ pub struct SexpParsingError {
 
 impl std::fmt::Display for SexpParsingError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Invalid token at: {:?}", self.position)
+        write!(f, "Invalid S-expression at offset {}: {}", self.position.offset, self.msg)
     }
 }
 
@@ -70,7 +70,7 @@ pub struct AstPasringError {
 
 impl std::fmt::Display for AstPasringError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Invalid token at: {:?}", self.position)
+        write!(f, "Invalid AST at offset {}: {}", self.position.offset, self.msg)
     }
 }
 
