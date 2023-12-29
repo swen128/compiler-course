@@ -5,7 +5,31 @@ pub enum Expr {
     Prim0(Op0),
     Prim1(Op1, Box<Expr>),
     Begin(Box<Expr>, Box<Expr>),
+    Variable(Variable),
+    Let(Let),
     If(If),
+}
+
+#[derive(Debug)]
+pub struct Let {
+    pub binding: Binding,
+    pub body: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub struct Binding {
+    pub lhs: Variable,
+    pub rhs: Box<Expr>,
+}
+
+#[derive(Debug, PartialEq)]
+
+pub struct Variable(pub String);
+
+impl Variable {
+    pub fn new(s: &str) -> Variable {
+        Variable(s.to_owned())
+    }
 }
 
 #[derive(Debug)]

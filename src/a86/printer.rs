@@ -104,6 +104,14 @@ fn print_operand(operand: &Operand) -> String {
             format!("{}", value)
         }
         Operand::Register(register) => print_register(register),
+
+        Operand::Offset(register, offset) => {
+            if offset >= &0 {
+                format!("[{} + {}]", print_register(register), offset)
+            } else {
+                format!("[{} - {}]", print_register(register), offset.abs())
+            }
+        }
     }
 }
 

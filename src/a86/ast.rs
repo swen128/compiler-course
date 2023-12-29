@@ -1,3 +1,4 @@
+#[derive(Debug, PartialEq, Clone)]
 pub enum Statement {
     Global { name: String },
     Extern { name: String },
@@ -27,6 +28,7 @@ pub enum Operand {
     Memory(String),
     Immediate(i64),
     Register(Register),
+    Offset(Register, i64),
 }
 
 #[derive(Debug, PartialEq, Clone)]

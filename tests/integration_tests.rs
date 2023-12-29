@@ -177,6 +177,22 @@ fn invalid_codepoint_to_char() {
     assert_eq!(result, Error::RuntimeError);
 }
 
+#[test]
+fn let_expression() {
+    let input = "(let ((x 42)) x)";
+    let result = run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn two_variables() {
+    let input = "(let ((x 42)) (let ((y 43)) x))";
+    let result = run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
 fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
     use std::process::{Command, Stdio};

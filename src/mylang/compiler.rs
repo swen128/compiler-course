@@ -1,4 +1,4 @@
-use super::ast;
+use super::ast::{self, Variable};
 use super::data_type::{Value, CHAR_SHIFT, INT_SHIFT, MASK_CHAR, TYPE_CHAR};
 use crate::a86::ast::*;
 use crate::mylang::data_type::{MASK_INT, TYPE_INT};
@@ -8,16 +8,48 @@ const R9: Operand = Operand::Register(Register::R9);
 
 struct Compiler {
     last_label_id: usize,
+    variables_table: VariablesTable,
 }
 
 impl Compiler {
     fn new() -> Compiler {
-        Compiler { last_label_id: 0 }
+        Compiler {
+            last_label_id: 0,
+            variables_table: VariablesTable::new(),
+        }
     }
 
     fn new_label_id(&mut self) -> String {
         self.last_label_id += 1;
         self.last_label_id.to_string()
+    }
+}
+
+struct VariablesTable {
+    variables: Vec<Variable>,
+}
+
+/// Keeps track of local variables, mapping them to lexical addresses.
+impl VariablesTable {
+    fn new() -> Self {
+        Self {
+            variables: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, variable: Variable) {
+        self.variables.push(variable);
+    }
+
+    fn pop(&mut self) {
+        self.variables.pop();
+    }
+
+    fn position(&self, variable: &Variable) -> Option<usize> {
+        self.variables
+            .iter()
+            .position(|v| v == variable)
+            .map(|i| self.variables.len() - i - 1)
     }
 }
 
@@ -78,6 +110,10 @@ fn compile_expr(expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
         ast::Expr::Begin(first, second) => compile_begin(*first, *second, compiler),
 
         ast::Expr::If(if_zero) => compile_if_expr(if_zero, compiler),
+
+        ast::Expr::Variable(variable) => compile_variable(variable, compiler),
+
+        ast::Expr::Let(let_expr) => compile_let(let_expr, compiler),
     }
 }
 
@@ -228,10 +264,7 @@ fn if_equal() -> Vec<Statement> {
             dest: R9,
             src: Operand::Immediate(Value::Boolean(true).encode()),
         },
-        Statement::Cmove {
-            dest: RAX,
-            src: R9,
-        },
+        Statement::Cmove { dest: RAX, src: R9 },
     ]
 }
 
@@ -266,6 +299,37 @@ fn compile_if_expr(if_expr: ast::If, compiler: &mut Compiler) -> Vec<Statement> 
         name: end_label.clone(),
     });
     statements
+}
+
+fn compile_let(expr: ast::Let, compiler: &mut Compiler) -> Vec<Statement> {
+    let ast::Let { binding, body } = expr;
+
+    let mut statements = compile_expr(*binding.rhs, compiler);
+    statements.push(Statement::Push {
+        src: Operand::Register(Register::RAX),
+    });
+    compiler.variables_table.push(binding.lhs);
+    statements.extend(compile_expr(*body, compiler));
+    compiler.variables_table.pop();
+
+    // Pop the value from the stack and discard it.
+    statements.push(Statement::Add {
+        dest: Operand::Register(Register::RSP),
+        src: Operand::Immediate(8),
+    });
+    statements
+}
+
+fn compile_variable(variable: Variable, compiler: &mut Compiler) -> Vec<Statement> {
+    let position = compiler
+        .variables_table
+        .position(&variable)
+        .expect(format!("Undefined variable `{}`", variable.0).as_str()); // TODO: Return `Result` type.
+    let offset = (position * 8) as i64;
+    vec![Statement::Mov {
+        dest: RAX,
+        src: Operand::Offset(Register::RSP, offset),
+    }]
 }
 
 fn assert_int(register: Register) -> Vec<Statement> {
@@ -371,4 +435,27 @@ fn assert_byte(register: Register) -> Vec<Statement> {
     });
 
     statements
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn variable_position() {
+        let mut variables_table = VariablesTable::new();
+        variables_table.push(Variable("a".to_string()));
+        variables_table.push(Variable("b".to_string()));
+        variables_table.push(Variable("c".to_string()));
+        variables_table.pop();
+        assert_eq!(
+            variables_table.position(&Variable("a".to_string())),
+            Some(1)
+        );
+        assert_eq!(
+            variables_table.position(&Variable("b".to_string())),
+            Some(0)
+        );
+        assert_eq!(variables_table.position(&Variable("c".to_string())), None);
+    }
 }

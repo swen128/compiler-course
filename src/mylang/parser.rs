@@ -1,4 +1,4 @@
-use super::ast;
+use super::ast::{self, Binding, Variable};
 use super::document::Position;
 use super::error::AstPasringError;
 use super::s_expression::{Atom, Expr, ExprKind, List};
@@ -23,7 +23,7 @@ fn parse_literal(atom: &Atom, position: Position) -> Result<ast::Expr, AstPasrin
         Atom::Character(c) => Ok(ast::Expr::Lit(ast::Lit::Char(*c))),
         Atom::Symbol(s) => match s.as_str() {
             "eof" => Ok(ast::Expr::Eof),
-            _ => Err(err(&format!("Unknown symbol: {}", s), position.clone())),
+            _ => Ok(ast::Expr::Variable(Variable::new(s))),
         },
     }
 }
@@ -48,6 +48,7 @@ fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringEr
             "peek-byte" => parse_prim0(ast::Op0::PeekByte, position, &mut elems),
             "begin" => parse_begin(&mut elems, position),
             "if" => parse_if(&mut elems, position),
+            "let" => parse_let(&mut elems, position),
             _ => Err(AstPasringError {
                 msg: format!("Unknown operator: {}", s),
                 position,
@@ -136,6 +137,92 @@ fn parse_if<'a>(
         })),
         Some(expr) => Err(err(
             "Expected 3 arguments. Got at least 4.",
+            expr.position.clone(),
+        )),
+    }
+}
+
+fn parse_let<'a>(
+    rest: &mut impl Iterator<Item = &'a Expr>,
+    position: Position,
+) -> Result<ast::Expr, AstPasringError> {
+    let bindings = match rest.next() {
+        None => Err(err("Missing variable bindings", position.clone())),
+
+        Some(expr) => match &expr.kind {
+            ExprKind::List(list) => parse_variable_bindings(&list, expr.position.clone()),
+            _ => Err(err("Expected a list of bindings", expr.position.clone())),
+        },
+    }?;
+
+    let binding = if bindings.len() == 1 {
+        bindings.into_iter().next().unwrap()
+    } else {
+        return Err(err("Expected a single variable binding", position.clone()));
+    };
+
+    let body = rest
+        .next()
+        .ok_or(err("Missing body of `let` expression", position))?;
+
+    match rest.next() {
+        None => Ok(ast::Expr::Let(ast::Let {
+            binding,
+            body: Box::new(parse_expr(&body)?),
+        })),
+        Some(expr) => Err(err(
+            "`let` expression should be of the form `(let <bindings> <body>)`, but got more than 2 arguments.",
+            expr.position.clone(),
+        )),
+    }
+}
+
+/// # Arguments
+/// * `list` - A list of variable bindings
+fn parse_variable_bindings<'a>(
+    list: &List,
+    position: Position,
+) -> Result<Vec<Binding>, AstPasringError> {
+    let List(elems) = list;
+    let elems = elems.iter();
+
+    elems
+        .map(|expr| match &expr.kind {
+            ExprKind::List(list) => parse_variable_binding(&list, expr.position.clone()),
+
+            _ => Err(err("Expected a variable binding", expr.position.clone())),
+        })
+        .collect()
+}
+
+/// # Arguments
+/// * `list` - A tuple of a variable name and a variable value
+fn parse_variable_binding<'a>(list: &List, position: Position) -> Result<Binding, AstPasringError> {
+    let List(elems) = list;
+    let mut elems = elems.iter();
+
+    let lhs = match elems.next() {
+        Some(Expr {
+            kind: ExprKind::Atom(Atom::Symbol(s)),
+            position: _,
+        }) => Variable(s.to_owned()),
+
+        Some(expr) => return Err(err("Expected a variable name", expr.position.clone())),
+        None => return Err(err("Missing variable name", position.clone())),
+    };
+
+    let rhs = elems
+        .next()
+        .ok_or(err("Missing variable value", position.clone()))?;
+    let rhs = parse_expr(&rhs)?;
+
+    match elems.next() {
+        None => Ok(Binding {
+            lhs,
+            rhs: Box::new(rhs),
+        }),
+        Some(expr) => Err(err(
+            "Expected 2 arguments. Got at least 3.",
             expr.position.clone(),
         )),
     }
