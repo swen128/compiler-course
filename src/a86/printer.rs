@@ -4,6 +4,7 @@ pub struct CompilationContext {
     pub platform: Platform,
 }
 
+#[allow(dead_code)]
 pub enum Platform {
     Linux,
     MacOS,
@@ -102,9 +103,6 @@ fn print_label(label: &String, context: &CompilationContext) -> String {
 
 fn print_operand(operand: &Operand) -> String {
     match operand {
-        Operand::Memory(name) => {
-            format!("[{}]", name)
-        }
         Operand::Immediate(value) => {
             format!("{}", value)
         }

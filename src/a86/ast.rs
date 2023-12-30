@@ -26,12 +26,12 @@ pub enum Statement {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Operand {
-    Memory(String),
     Immediate(i64),
     Register(Register),
     Offset(Register, i64),
 }
 
+#[allow(dead_code)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum Register {
     RAX,

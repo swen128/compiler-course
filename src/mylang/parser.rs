@@ -16,7 +16,7 @@ pub fn parse_expr(expr: &Expr) -> Result<ast::Expr, AstPasringError> {
     }
 }
 
-fn parse_literal(atom: &Atom, position: Position) -> Result<ast::Expr, AstPasringError> {
+fn parse_literal(atom: &Atom, _position: Position) -> Result<ast::Expr, AstPasringError> {
     match atom {
         Atom::Integer(n) => Ok(ast::Expr::Lit(ast::Lit::Int(*n))),
         Atom::Boolean(b) => Ok(ast::Expr::Lit(ast::Lit::Bool(*b))),
@@ -216,7 +216,7 @@ fn parse_let<'a>(
 /// * `list` - A list of variable bindings
 fn parse_variable_bindings<'a>(
     list: &List,
-    position: Position,
+    _position: Position,
 ) -> Result<Vec<Binding>, AstPasringError> {
     let List(elems) = list;
     let elems = elems.iter();

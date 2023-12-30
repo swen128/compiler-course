@@ -1,10 +1,10 @@
 use super::ast::{self, Variable};
-use super::data_type::{Value, CHAR_SHIFT, INT_SHIFT, MASK_CHAR, TYPE_CHAR};
+use super::data_type::{Value, CHAR_SHIFT, INT_SHIFT, MASK_CHAR, MASK_INT, TYPE_CHAR, TYPE_INT};
 use crate::a86::ast::*;
-use crate::mylang::data_type::{MASK_INT, TYPE_INT};
 
 const RAX: Operand = Operand::Register(Register::RAX);
 const RSP: Operand = Operand::Register(Register::RSP);
+const RDI: Operand = Operand::Register(Register::RDI);
 const R8: Operand = Operand::Register(Register::R8);
 const R9: Operand = Operand::Register(Register::R9);
 const R15: Operand = Operand::Register(Register::R15);
@@ -45,7 +45,7 @@ impl VariablesTable {
     fn push_variable(&mut self, variable: Variable) {
         self.variables.push(Some(variable));
     }
-    
+
     /// Pushes a new non-variable to the stack.
     /// This should be called whenever pushing an arbitrary non-variable value to the stack.
     fn push_non_variable(&mut self) {
@@ -123,11 +123,7 @@ fn compile_expr(expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
 }
 
 fn compile_literal(lit: ast::Lit) -> Vec<Statement> {
-    match lit {
-        ast::Lit::Int(i) => compile_value(Value::Int(i)),
-        ast::Lit::Bool(b) => compile_value(Value::Boolean(b)),
-        ast::Lit::Char(c) => compile_value(Value::Char(c)),
-    }
+    compile_value(Value::from(lit))
 }
 
 fn compile_eof() -> Vec<Statement> {
@@ -137,7 +133,7 @@ fn compile_eof() -> Vec<Statement> {
 fn compile_value(value: Value) -> Vec<Statement> {
     vec![Statement::Mov {
         dest: RAX,
-        src: Operand::Immediate(value.encode()),
+        src: Operand::from(value),
     }]
 }
 
@@ -182,7 +178,7 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
             let mut statements = assert_int(Register::RAX);
             statements.push(Statement::Add {
                 dest: RAX,
-                src: Operand::Immediate(Value::Int(1).encode()),
+                src: Operand::from(Value::Int(1)),
             });
             statements
         }
@@ -191,7 +187,7 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
             let mut statements = assert_int(Register::RAX);
             statements.push(Statement::Sub {
                 dest: RAX,
-                src: Operand::Immediate(Value::Int(1).encode()),
+                src: Operand::from(Value::Int(1)),
             });
             statements
         }
@@ -263,7 +259,7 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
         ast::Op1::WriteByte => {
             let mut statements = assert_byte(Register::RAX);
             statements.push(Statement::Mov {
-                dest: Operand::Register(Register::RDI),
+                dest: RDI,
                 src: RAX,
             });
             statements.extend(call("write_byte".to_string()));
@@ -353,7 +349,7 @@ fn compile_if_expr(if_expr: ast::If, compiler: &mut Compiler) -> Vec<Statement> 
     let mut statements = compile_expr(*if_expr.cond, compiler);
     statements.push(Statement::Cmp {
         dest: RAX,
-        src: Operand::Immediate(Value::Boolean(false).encode()),
+        src: Operand::from(Value::Boolean(false)),
     });
     statements.push(Statement::Je {
         label: else_label.clone(),
@@ -376,16 +372,14 @@ fn compile_let(expr: ast::Let, compiler: &mut Compiler) -> Vec<Statement> {
     let ast::Let { binding, body } = expr;
 
     let mut statements = compile_expr(*binding.rhs, compiler);
-    statements.push(Statement::Push {
-        src: Operand::Register(Register::RAX),
-    });
+    statements.push(Statement::Push { src: RAX });
     compiler.variables_table.push_variable(binding.lhs);
     statements.extend(compile_expr(*body, compiler));
     compiler.variables_table.pop();
 
     // Pop the value from the stack and discard it.
     statements.push(Statement::Add {
-        dest: Operand::Register(Register::RSP),
+        dest: RSP,
         src: Operand::Immediate(8),
     });
     statements
@@ -449,14 +443,14 @@ fn assert_codepoint() -> Vec<Statement> {
     // Make sure the value is in the range 0..=0x10FFFF
     statements.push(Statement::Cmp {
         dest: RAX,
-        src: Operand::Immediate(Value::Int(0).encode()),
+        src: Operand::from(Value::Int(0)),
     });
     statements.push(Statement::Jl {
         label: "err".to_string(),
     });
     statements.push(Statement::Cmp {
         dest: RAX,
-        src: Operand::Immediate(Value::Int(0x10FFFF).encode()),
+        src: Operand::from(Value::Int(0x10FFFF)),
     });
     statements.push(Statement::Jg {
         label: "err".to_string(),
@@ -465,14 +459,14 @@ fn assert_codepoint() -> Vec<Statement> {
     // except for the range 55296..=57343.
     statements.push(Statement::Cmp {
         dest: RAX,
-        src: Operand::Immediate(Value::Int(55295).encode()),
+        src: Operand::from(Value::Int(55295)),
     });
     statements.push(Statement::Jl {
         label: "ok".to_string(),
     });
     statements.push(Statement::Cmp {
         dest: RAX,
-        src: Operand::Immediate(Value::Int(57344).encode()),
+        src: Operand::from(Value::Int(57344)),
     });
     statements.push(Statement::Jg {
         label: "ok".to_string(),
@@ -492,14 +486,14 @@ fn assert_byte(register: Register) -> Vec<Statement> {
     // Make sure the value is in the range 0..=255
     statements.push(Statement::Cmp {
         dest: R9,
-        src: Operand::Immediate(Value::Int(0).encode()),
+        src: Operand::from(Value::Int(0)),
     });
     statements.push(Statement::Jl {
         label: "err".to_string(),
     });
     statements.push(Statement::Cmp {
         dest: R9,
-        src: Operand::Immediate(Value::Int(255).encode()),
+        src: Operand::from(Value::Int(255)),
     });
     statements.push(Statement::Jg {
         label: "err".to_string(),
@@ -541,6 +535,12 @@ fn unpad_stack() -> Vec<Statement> {
         dest: RSP,
         src: R15,
     }]
+}
+
+impl From<Value> for Operand {
+    fn from(value: Value) -> Self {
+        Operand::Immediate(value.encode())
+    }
 }
 
 #[cfg(test)]
