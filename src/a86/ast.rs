@@ -5,6 +5,7 @@ pub enum Statement {
     Label { name: String },
     Mov { dest: Operand, src: Operand },
     And { dest: Operand, src: Operand },
+    Or { dest: Operand, src: Operand },
     Xor { dest: Operand, src: Operand },
     Sar { dest: Operand, src: Operand },
     Sal { dest: Operand, src: Operand },

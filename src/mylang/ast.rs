@@ -45,6 +45,7 @@ pub enum Lit {
     Int(i64),
     Bool(bool),
     Char(char),
+    EmptyList,
 }
 
 #[derive(Debug)]
@@ -60,9 +61,15 @@ pub enum Op1 {
     IsZero,
     IsChar,
     IsEof,
+    IsBox,
+    IsCons,
     IntToChar,
     CharToInt,
     WriteByte,
+    Box,
+    Unbox,
+    Car,
+    Cdr,
 }
 
 #[derive(Debug)]
@@ -71,6 +78,7 @@ pub enum Op2 {
     Sub,
     LessThan,
     Equal,
+    Cons,
 }
 
 #[derive(Debug)]

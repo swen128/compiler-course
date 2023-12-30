@@ -7,6 +7,7 @@
 FILE* in;
 FILE* out;
 void (*error_handler)();
+val_t *heap;
 
 void error_exit()
 {
@@ -24,11 +25,14 @@ int main(int argc, char** argv)
   in = stdin;
   out = stdout;
   error_handler = &error_exit;
-  
+  heap = malloc(8 * heap_size);
+
   val_t result;
 
-  result = entry();
+  result = entry(heap);
+
   print_result(result);
 
+  free(heap);
   return 0;
 }

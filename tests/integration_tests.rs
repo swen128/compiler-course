@@ -134,7 +134,7 @@ fn begin() {
 fn read_void() {
     let input = "(read-byte)";
     let result = run(input).unwrap();
-    let expected = "";
+    let expected = "#<eof>";
     assert_eq!(result, expected);
 }
 
@@ -206,6 +206,78 @@ fn add_two_variables() {
     let input = "(let ((x 42)) (let ((y 1)) (+ x y)))";
     let result = run(input).unwrap();
     let expected = "43";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn box_expression() {
+    let input = "(box 42)";
+    let result = run(input).unwrap();
+    let expected = "'#&42";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn unbox() {
+    let input = "(unbox (box 42))";
+    let result = run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_box() {
+    let input = "(box? (box 42))";
+    let result = run(input).unwrap();
+    let expected = "#t";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_not_box() {
+    let input = "(box? 42)";
+    let result = run(input).unwrap();
+    let expected = "#f";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn cons() {
+    let input = "(cons 42 (cons 43 ()))";
+    let result = run(input).unwrap();
+    let expected = "'(42 43)";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn car() {
+    let input = "(car (cons 42 (cons 43 ())))";
+    let result = run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn cdr() {
+    let input = "(cdr (cons 42 (cons 43 ())))";
+    let result = run(input).unwrap();
+    let expected = "'(43)";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_cons() {
+    let input = "(cons? (cons 42 (cons 43 ())))";
+    let result = run(input).unwrap();
+    let expected = "#t";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_not_cons() {
+    let input = "(cons? 42)";
+    let result = run(input).unwrap();
+    let expected = "#f";
     assert_eq!(result, expected);
 }
 

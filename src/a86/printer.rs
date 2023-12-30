@@ -30,6 +30,7 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Label { name } => format!("{}:", print_label(name, context)),
         Statement::Mov { dest, src } => print_mov(dest, src),
         Statement::And { dest, src } => print_and(dest, src),
+        Statement::Or { dest, src } => print_or(dest, src),
         Statement::Xor { dest, src } => print_xor(dest, src),
         Statement::Sar { dest, src } => print_sar(dest, src),
         Statement::Sal { dest, src } => print_sal(dest, src),
@@ -56,6 +57,10 @@ fn print_mov(dest: &Operand, src: &Operand) -> String {
 
 fn print_and(dest: &Operand, src: &Operand) -> String {
     format!("\tand {}, {}", print_operand(dest), print_operand(src))
+}
+
+fn print_or(dest: &Operand, src: &Operand) -> String {
+    format!("\tor {}, {}", print_operand(dest), print_operand(src))
 }
 
 fn print_xor(dest: &Operand, src: &Operand) -> String {

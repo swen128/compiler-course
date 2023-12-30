@@ -28,10 +28,13 @@ fn parse_literal(atom: &Atom, _position: Position) -> Result<ast::Expr, AstPasri
     }
 }
 
-fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringError> {
+fn parse_list(list: &List, _position: Position) -> Result<ast::Expr, AstPasringError> {
     let List(elems) = list;
     let mut elems = elems.iter();
-    let head = elems.next().ok_or(err("Empty list.", position))?;
+    let head = match elems.next() {
+        Some(expr) => expr,
+        None => return Ok(ast::Expr::Lit(ast::Lit::EmptyList)),
+    };
     let position = head.position.clone();
 
     match &head.kind {
@@ -41,21 +44,34 @@ fn parse_list(list: &List, position: Position) -> Result<ast::Expr, AstPasringEr
 
             "add1" => parse_prim1(ast::Op1::Add1, position, &mut elems),
             "sub1" => parse_prim1(ast::Op1::Sub1, position, &mut elems),
+
             "zero?" => parse_prim1(ast::Op1::IsZero, position, &mut elems),
             "char?" => parse_prim1(ast::Op1::IsChar, position, &mut elems),
+            "eof-object?" => parse_prim1(ast::Op1::IsEof, position, &mut elems),
+            "box?" => parse_prim1(ast::Op1::IsBox, position, &mut elems),
+            "cons?" => parse_prim1(ast::Op1::IsCons, position, &mut elems),
+
             "integer->char" => parse_prim1(ast::Op1::IntToChar, position, &mut elems),
             "char->integer" => parse_prim1(ast::Op1::CharToInt, position, &mut elems),
-            "eof-object?" => parse_prim1(ast::Op1::IsEof, position, &mut elems),
+
             "write-byte" => parse_prim1(ast::Op1::WriteByte, position, &mut elems),
+
+            "box" => parse_prim1(ast::Op1::Box, position, &mut elems),
+            "unbox" => parse_prim1(ast::Op1::Unbox, position, &mut elems),
+            "car" => parse_prim1(ast::Op1::Car, position, &mut elems),
+            "cdr" => parse_prim1(ast::Op1::Cdr, position, &mut elems),
 
             "+" => parse_prim2(ast::Op2::Add, position, &mut elems),
             "-" => parse_prim2(ast::Op2::Sub, position, &mut elems),
             "<" => parse_prim2(ast::Op2::LessThan, position, &mut elems),
             "=" => parse_prim2(ast::Op2::Equal, position, &mut elems),
 
+            "cons" => parse_prim2(ast::Op2::Cons, position, &mut elems),
+
             "begin" => parse_begin(&mut elems, position),
             "if" => parse_if(&mut elems, position),
             "let" => parse_let(&mut elems, position),
+
             _ => Err(AstPasringError {
                 msg: format!("Unknown operator: {}", s),
                 position,

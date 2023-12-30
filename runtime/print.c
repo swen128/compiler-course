@@ -1,11 +1,11 @@
-
 #include <stdio.h>
 #include <inttypes.h>
 #include "values.h"
-#include "types.h"
 
 void print_char(val_char_t);
 void print_codepoint(val_char_t);
+void print_cons(val_cons_t *);
+void print_result_interior(val_t);
 int utf8_encode_char(val_char_t, char *);
 
 void print_result(val_t x)
@@ -14,18 +14,64 @@ void print_result(val_t x)
   case T_INT:
     printf("%" PRId64, val_unwrap_int(x));
     break;
-  case T_BOOL:    
+  case T_BOOL:
     printf(val_unwrap_bool(x) ? "#t" : "#f");
     break;
   case T_CHAR:
-    print_char(val_unwrap_char(x));    
+    print_char(val_unwrap_char(x));
+    break;
+  case T_EOF:
+    printf("#<eof>");
     break;
   case T_VOID:
     break;
-  case T_EOF:
+  case T_EMPTY:
+  case T_BOX:
+  case T_CONS:
+    printf("'");
+    print_result_interior(x);
     break;
   case T_INVALID:
     printf("internal error");
+  }
+}
+
+void print_result_interior(val_t x)
+{
+  switch (val_typeof(x)) {
+  case T_EMPTY:
+    printf("()");
+    break;
+  case T_BOX:
+    printf("#&");
+    print_result_interior(val_unwrap_box(x)->val);
+    break;
+  case T_CONS:
+    printf("(");
+    print_cons(val_unwrap_cons(x));
+    printf(")");
+    break;
+  default:
+    print_result(x);
+  }
+}
+
+void print_cons(val_cons_t *cons)
+{
+  print_result_interior(cons->fst);
+
+  switch (val_typeof(cons->snd)) {
+  case T_EMPTY:
+    // nothing
+    break;
+  case T_CONS:
+    printf(" ");
+    print_cons(val_unwrap_cons(cons->snd));
+    break;
+  default:
+    printf(" . ");
+    print_result_interior(cons->snd);
+    break;
   }
 }
 
@@ -58,7 +104,7 @@ void print_char(val_char_t c)
 
 void print_codepoint(val_char_t c)
 {
-  static char buffer[5] = {0};
+  char buffer[5] = {0};
   utf8_encode_char(c, buffer);
   printf("%s", buffer);
 }

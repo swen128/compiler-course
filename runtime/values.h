@@ -12,11 +12,22 @@ typedef enum type_t {
   T_INT,
   T_BOOL,
   T_CHAR,
+  T_EOF,  
   T_VOID,
-  T_EOF,
+  T_EMPTY,
+  /* pointers */
+  T_BOX,
+  T_CONS, 
 } type_t;
 
 typedef uint32_t val_char_t;
+typedef struct val_box_t {
+  val_t val;
+} val_box_t;
+typedef struct val_cons_t {
+  val_t snd;
+  val_t fst;
+} val_cons_t;
 
 /* return the type of x */
 type_t val_typeof(val_t x);
@@ -28,6 +39,7 @@ type_t val_typeof(val_t x);
  */
 int64_t val_unwrap_int(val_t x);
 val_t val_wrap_int(int64_t i);
+val_t val_wrap_byte(unsigned char b);
 
 int val_unwrap_bool(val_t x);
 val_t val_wrap_bool(int b);
@@ -35,9 +47,14 @@ val_t val_wrap_bool(int b);
 val_char_t val_unwrap_char(val_t x);
 val_t val_wrap_char(val_char_t b);
 
-val_t val_wrap_byte(int c);
+val_t val_wrap_eof();
 
-val_t val_wrap_void(void);
-val_t val_wrap_eof(void);
+val_t val_wrap_void();
+
+val_box_t* val_unwrap_box(val_t x);
+val_t val_wrap_box(val_box_t* b);
+
+val_cons_t* val_unwrap_cons(val_t x);
+val_t val_wrap_cons(val_cons_t* c);
 
 #endif

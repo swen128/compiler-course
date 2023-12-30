@@ -3,22 +3,30 @@
 
 type_t val_typeof(val_t x)
 {
+  switch (x & ptr_type_mask) {
+  case box_type_tag:
+    return T_BOX;
+  case cons_type_tag:
+    return T_CONS;
+  }
+
   if ((int_type_mask & x) == int_type_tag)
     return T_INT;
   if ((char_type_mask & x) == char_type_tag)
     return T_CHAR;
-  
+
   switch (x) {
   case val_true:
   case val_false:
     return T_BOOL;
-  
-  case val_void:
-    return T_VOID;
   case val_eof:
     return T_EOF;
+  case val_void:
+    return T_VOID;
+  case val_empty:
+    return T_EMPTY;
   }
-  
+
   return T_INVALID;
 }
 
@@ -30,10 +38,9 @@ val_t val_wrap_int(int64_t i)
 {
   return (i << int_shift) | int_type_tag;
 }
-
-val_t val_wrap_byte(int c) 
+val_t val_wrap_byte(unsigned char b)
 {
-  return (c << int_shift) | int_type_tag;
+  return (b << int_shift) | int_type_tag;
 }
 
 int val_unwrap_bool(val_t x)
@@ -54,12 +61,30 @@ val_t val_wrap_char(val_char_t c)
   return (((val_t)c) << char_shift) | char_type_tag;
 }
 
+val_t val_wrap_eof(void)
+{
+  return val_eof;
+}
+
 val_t val_wrap_void(void)
 {
   return val_void;
 }
 
-val_t val_wrap_eof(void)
+val_box_t* val_unwrap_box(val_t x)
 {
-  return val_eof;
+  return (val_box_t *)(x ^ box_type_tag);
+}
+val_t val_wrap_box(val_box_t* b)
+{
+  return ((val_t)b) | box_type_tag;
+}
+
+val_cons_t* val_unwrap_cons(val_t x)
+{
+  return (val_cons_t *)(x ^ cons_type_tag);
+}
+val_t val_wrap_cons(val_cons_t *c)
+{
+  return ((val_t)c) | cons_type_tag;
 }

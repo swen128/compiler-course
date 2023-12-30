@@ -1,8 +1,9 @@
 use super::ast::{self, Variable};
-use super::data_type::{Value, CHAR_SHIFT, INT_SHIFT, MASK_CHAR, MASK_INT, TYPE_CHAR, TYPE_INT};
+use super::data_type::{UnaryType, Value, BOX_TYPE, CHAR_TYPE, CONS_TYPE, INT_TYPE};
 use crate::a86::ast::*;
 
 const RAX: Operand = Operand::Register(Register::RAX);
+const RBX: Operand = Operand::Register(Register::RBX);
 const RSP: Operand = Operand::Register(Register::RSP);
 const RDI: Operand = Operand::Register(Register::RDI);
 const R8: Operand = Operand::Register(Register::R8);
@@ -84,6 +85,10 @@ pub fn compile(program: ast::Program) -> Program {
         },
         Statement::Label {
             name: "entry".to_string(),
+        },
+        Statement::Mov {
+            dest: RBX,
+            src: RDI, // The runtime must allocate the heap memory and pass its address via rdi.
         },
     ];
     statements.extend(compile_expr(program.expr, &mut compiler));
@@ -202,20 +207,9 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
             statements
         }
 
-        ast::Op1::IsChar => {
-            let mut statements = vec![
-                Statement::And {
-                    dest: RAX,
-                    src: Operand::Immediate(MASK_CHAR),
-                },
-                Statement::Cmp {
-                    dest: RAX,
-                    src: Operand::Immediate(TYPE_CHAR),
-                },
-            ];
-            statements.extend(if_equal());
-            statements
-        }
+        ast::Op1::IsChar => is_type(&CHAR_TYPE),
+        ast::Op1::IsBox => is_type(&BOX_TYPE),
+        ast::Op1::IsCons => is_type(&CONS_TYPE),
 
         ast::Op1::IsEof => {
             let mut statements = vec![Statement::Cmp {
@@ -228,31 +222,13 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
 
         ast::Op1::CharToInt => {
             let mut statements = assert_char(Register::RAX);
-            statements.push(Statement::Sar {
-                dest: RAX,
-                src: Operand::Immediate(CHAR_SHIFT),
-            });
-            statements.push(Statement::Sal {
-                dest: RAX,
-                src: Operand::Immediate(INT_SHIFT),
-            });
+            statements.extend(cast_type(Register::RAX, &CHAR_TYPE, &INT_TYPE));
             statements
         }
 
         ast::Op1::IntToChar => {
             let mut statements = assert_codepoint();
-            statements.push(Statement::Sar {
-                dest: RAX,
-                src: Operand::Immediate(INT_SHIFT),
-            });
-            statements.push(Statement::Sal {
-                dest: RAX,
-                src: Operand::Immediate(CHAR_SHIFT),
-            });
-            statements.push(Statement::Xor {
-                dest: RAX,
-                src: Operand::Immediate(TYPE_CHAR),
-            });
+            statements.extend(cast_type(Register::RAX, &INT_TYPE, &CHAR_TYPE));
             statements
         }
 
@@ -263,6 +239,69 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
                 src: RAX,
             });
             statements.extend(call("write_byte".to_string()));
+            statements
+        }
+
+        ast::Op1::Box => {
+            vec![
+                // Put the value into the heap.
+                Statement::Mov {
+                    dest: Operand::Offset(Register::RBX, 0),
+                    src: RAX,
+                },
+                // Tag the address as box data type and return it.
+                Statement::Mov {
+                    dest: RAX,
+                    src: RBX,
+                },
+                Statement::Or {
+                    dest: RAX,
+                    src: Operand::Immediate(BOX_TYPE.tag.0 as i64),
+                },
+                // Advance the heap pointer 1 word.
+                Statement::Add {
+                    dest: RBX,
+                    src: Operand::Immediate(8),
+                },
+            ]
+        }
+
+        ast::Op1::Unbox => {
+            let mut statements = assert_box(Register::RAX);
+            statements.push(Statement::Xor {
+                dest: RAX,
+                src: Operand::Immediate(BOX_TYPE.tag.0 as i64),
+            });
+            statements.push(Statement::Mov {
+                dest: RAX,
+                src: Operand::Offset(Register::RAX, 0),
+            });
+            statements
+        }
+
+        ast::Op1::Car => {
+            let mut statements = assert_cons(Register::RAX);
+            statements.push(Statement::Xor {
+                dest: RAX,
+                src: Operand::Immediate(CONS_TYPE.tag.0 as i64),
+            });
+            statements.push(Statement::Mov {
+                dest: RAX,
+                src: Operand::Offset(Register::RAX, 8),
+            });
+            statements
+        }
+
+        ast::Op1::Cdr => {
+            let mut statements = assert_cons(Register::RAX);
+            statements.push(Statement::Xor {
+                dest: RAX,
+                src: Operand::Immediate(CONS_TYPE.tag.0 as i64),
+            });
+            statements.push(Statement::Mov {
+                dest: RAX,
+                src: Operand::Offset(Register::RAX, 0),
+            });
             statements
         }
     }
@@ -301,6 +340,34 @@ fn compile_op2(op: ast::Op2) -> Vec<Statement> {
             statements.push(Statement::Cmp { dest: RAX, src: R8 });
             statements.extend(if_less_than());
             statements
+        }
+
+        ast::Op2::Cons => {
+            vec![
+                // Put the values into the heap.
+                Statement::Mov {
+                    dest: Operand::Offset(Register::RBX, 0),
+                    src: RAX,
+                },
+                Statement::Mov {
+                    dest: Operand::Offset(Register::RBX, 8),
+                    src: R8,
+                },
+                // Tag the address as cons data type and return it.
+                Statement::Mov {
+                    dest: RAX,
+                    src: RBX,
+                },
+                Statement::Or {
+                    dest: RAX,
+                    src: Operand::Immediate(CONS_TYPE.tag.0 as i64),
+                },
+                // Advance the heap pointer 2 words.
+                Statement::Add {
+                    dest: RBX,
+                    src: Operand::Immediate(16),
+                },
+            ]
         }
     }
 }
@@ -397,7 +464,40 @@ fn compile_variable(variable: Variable, compiler: &mut Compiler) -> Vec<Statemen
     }]
 }
 
-fn assert_int(register: Register) -> Vec<Statement> {
+fn cast_type(register: Register, from: &UnaryType, to: &UnaryType) -> Vec<Statement> {
+    vec![
+        Statement::Sar {
+            dest: Operand::Register(register.clone()),
+            src: Operand::Immediate(from.shift as i64),
+        },
+        Statement::Sal {
+            dest: Operand::Register(register.clone()),
+            src: Operand::Immediate(to.shift as i64),
+        },
+        Statement::Xor {
+            dest: Operand::Register(register),
+            src: Operand::Immediate(to.tag.0 as i64),
+        },
+    ]
+}
+
+/// Returns instructions which sets rax to true iff the value in rax is of the given type.
+fn is_type(type_: &UnaryType) -> Vec<Statement> {
+    let mut statements = vec![
+        Statement::And {
+            dest: RAX,
+            src: Operand::Immediate(type_.mask() as i64),
+        },
+        Statement::Cmp {
+            dest: RAX,
+            src: Operand::Immediate(type_.tag.0 as i64),
+        },
+    ];
+    statements.extend(if_equal());
+    statements
+}
+
+fn assert_type(register: Register, type_: &UnaryType) -> Vec<Statement> {
     vec![
         Statement::Mov {
             dest: R9,
@@ -405,11 +505,11 @@ fn assert_int(register: Register) -> Vec<Statement> {
         },
         Statement::And {
             dest: R9,
-            src: Operand::Immediate(MASK_INT),
+            src: Operand::Immediate(type_.mask() as i64),
         },
         Statement::Cmp {
             dest: R9,
-            src: Operand::Immediate(TYPE_INT),
+            src: Operand::Immediate(type_.tag.0 as i64),
         },
         Statement::Jne {
             label: "err".to_string(),
@@ -417,24 +517,20 @@ fn assert_int(register: Register) -> Vec<Statement> {
     ]
 }
 
+fn assert_int(register: Register) -> Vec<Statement> {
+    assert_type(register, &INT_TYPE)
+}
+
 fn assert_char(register: Register) -> Vec<Statement> {
-    vec![
-        Statement::Mov {
-            dest: R9,
-            src: Operand::Register(register),
-        },
-        Statement::And {
-            dest: R9,
-            src: Operand::Immediate(MASK_CHAR),
-        },
-        Statement::Cmp {
-            dest: R9,
-            src: Operand::Immediate(TYPE_CHAR),
-        },
-        Statement::Jne {
-            label: "err".to_string(),
-        },
-    ]
+    assert_type(register, &CHAR_TYPE)
+}
+
+fn assert_box(register: Register) -> Vec<Statement> {
+    assert_type(register, &BOX_TYPE)
+}
+
+fn assert_cons(register: Register) -> Vec<Statement> {
+    assert_type(register, &CONS_TYPE)
 }
 
 fn assert_codepoint() -> Vec<Statement> {

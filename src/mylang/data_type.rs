@@ -8,18 +8,28 @@ pub enum Value {
     Char(char),
     Eof,
     Void,
+    EmptyList,
+    Cons(Address),
+    Box(Address),
 }
+
+pub struct Address(pub i64);
 
 impl Value {
     pub fn encode(self) -> i64 {
         match self {
-            Value::Int(i) => i << INT_SHIFT,
-            Value::Byte(b) => (b as i64) << INT_SHIFT,
-            Value::Char(c) => ((c as i64) << CHAR_SHIFT) + TYPE_CHAR,
-            Value::Boolean(true) => TYPE_TRUE,
-            Value::Boolean(false) => TYPE_FALSE,
-            Value::Eof => TYPE_EOF,
-            Value::Void => TYPE_VOID,
+            Value::Int(i) => INT_TYPE.encode(i),
+            Value::Byte(b) => INT_TYPE.encode(b as i64),
+            Value::Char(c) => CHAR_TYPE.encode(c as i64),
+
+            Value::Box(Address(a)) => BOX_TYPE.encode(a),
+            Value::Cons(Address(a)) => CONS_TYPE.encode(a),
+
+            Value::Boolean(true) => TRUE_TYPE.0 as i64,
+            Value::Boolean(false) => FALSE_TYPE.0 as i64,
+            Value::Eof => EOF_TYPE.0 as i64,
+            Value::Void => VOID_TYPE.0 as i64,
+            Value::EmptyList => EMPTY_TYPE.0 as i64,
         }
     }
 }
@@ -30,21 +40,70 @@ impl From<Lit> for Value {
             Lit::Int(i) => Value::Int(i),
             Lit::Char(c) => Value::Char(c),
             Lit::Bool(b) => Value::Boolean(b),
+            Lit::EmptyList => Value::EmptyList,
         }
     }
 }
 
-pub const INT_SHIFT: i64 = 1;
-pub const MASK_INT: i64 = 0b1;
-pub const TYPE_INT: i64 = 0b0;
+pub struct TypeTag(pub u64);
 
-pub const CHAR_SHIFT: i64 = 2;
-pub const TYPE_CHAR: i64 = 0b01;
-pub const MASK_CHAR: i64 = 0b11;
+pub struct UnaryType {
+    pub shift: u64,
+    pub tag: TypeTag,
+}
 
-const TYPE_TRUE: i64 = 0b11;
-const TYPE_FALSE: i64 = 0b111;
+impl UnaryType {
+    pub fn encode(&self, value: i64) -> i64 {
+        (value << self.shift) + (self.tag.0 as i64)
+    }
 
-const TYPE_EOF: i64 = 0b1011;
+    pub fn mask(&self) -> u64 {
+        (1 << self.shift) - 1
+    }
+}
 
-const TYPE_VOID: i64 = 0b1111;
+// Bit layout of values
+//
+// Values are either:
+// - Immediates: end in #b000
+// - Pointers
+//
+// Pointers are either:
+// - Boxes: end in #b001
+// - Cons:  end in #b010
+//
+// Immediates are either
+// - Integers:   end in  #b0 000
+// - Characters: end in #b01 000
+// - True:              #b11 000
+// - False:           #b1 11 000
+// - Eof:            #b10 11 000
+// - Void:           #b11 11 000
+// - Empty:         #b100 11 000
+const IMMEDIATE_SHIFT: u64 = 3;
+
+pub const BOX_TYPE: UnaryType = UnaryType {
+    shift: IMMEDIATE_SHIFT,
+    tag: TypeTag(0b001),
+};
+
+pub const CONS_TYPE: UnaryType = UnaryType {
+    shift: IMMEDIATE_SHIFT,
+    tag: TypeTag(0b010),
+};
+
+pub const INT_TYPE: UnaryType = UnaryType {
+    shift: 1 + IMMEDIATE_SHIFT,
+    tag: TypeTag(0b0 << IMMEDIATE_SHIFT),
+};
+
+pub const CHAR_TYPE: UnaryType = UnaryType {
+    shift: 2 + IMMEDIATE_SHIFT,
+    tag: TypeTag(0b01 << IMMEDIATE_SHIFT),
+};
+
+pub const TRUE_TYPE: TypeTag = TypeTag(0b11 << IMMEDIATE_SHIFT);
+pub const FALSE_TYPE: TypeTag = TypeTag(0b111 << IMMEDIATE_SHIFT);
+pub const EOF_TYPE: TypeTag = TypeTag(0b1011 << IMMEDIATE_SHIFT);
+pub const VOID_TYPE: TypeTag = TypeTag(0b1111 << IMMEDIATE_SHIFT);
+pub const EMPTY_TYPE: TypeTag = TypeTag(0b10011 << IMMEDIATE_SHIFT);
