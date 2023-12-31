@@ -27,6 +27,7 @@ pub enum Atom {
     Integer(i64),
     Boolean(bool),
     Character(char),
+    String(String),
 }
 
 impl Expr {
@@ -54,6 +55,13 @@ impl Expr {
     pub fn char(c: char, position: Position) -> Expr {
         Expr {
             kind: ExprKind::Atom(Atom::Character(c)),
+            position,
+        }
+    }
+    
+    pub fn string(s: String, position: Position) -> Expr {
+        Expr {
+            kind: ExprKind::Atom(Atom::String(s)),
             position,
         }
     }
@@ -87,6 +95,7 @@ fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Res
             TokenKind::Symbol(s) => Ok(Expr::symbol(&s, position)),
             TokenKind::Boolean(b) => Ok(Expr::bool(b, position)),
             TokenKind::Character(c) => Ok(Expr::char(c, position)),
+            TokenKind::String(s) => Ok(Expr::string(s, position)),
         },
     }
 }

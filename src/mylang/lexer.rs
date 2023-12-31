@@ -25,6 +25,9 @@ pub enum TokenKind {
 
     #[regex(r"#\\.", |lex| lex.slice().chars().nth(2).unwrap())]
     Character(char),
+
+    #[regex(r#""(?:[^"]|\\")*""#, strip_first_and_last_char)]
+    String(String),
 }
 
 #[derive(Debug)]
@@ -56,4 +59,11 @@ fn parse_bool(lex: &mut Lexer<TokenKind>) -> bool {
         "#f" => false,
         _ => panic!("Invalid boolean literal"),
     }
+}
+
+fn strip_first_and_last_char(lex: &mut Lexer<TokenKind>) -> String {
+    let mut chars = lex.slice().chars();
+    chars.next();
+    chars.next_back();
+    chars.collect()
 }

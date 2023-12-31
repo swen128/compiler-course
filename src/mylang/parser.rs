@@ -21,6 +21,7 @@ fn parse_literal(atom: &Atom, _position: Position) -> Result<ast::Expr, AstPasri
         Atom::Integer(n) => Ok(ast::Expr::Lit(ast::Lit::Int(*n))),
         Atom::Boolean(b) => Ok(ast::Expr::Lit(ast::Lit::Bool(*b))),
         Atom::Character(c) => Ok(ast::Expr::Lit(ast::Lit::Char(*c))),
+        Atom::String(s) => Ok(ast::Expr::String(s.to_owned())),
         Atom::Symbol(s) => match s.as_str() {
             "eof" => Ok(ast::Expr::Eof),
             _ => Ok(ast::Expr::Variable(Variable::new(s))),
@@ -50,6 +51,8 @@ fn parse_list(list: &List, _position: Position) -> Result<ast::Expr, AstPasringE
             "eof-object?" => parse_prim1(ast::Op1::IsEof, position, &mut elems),
             "box?" => parse_prim1(ast::Op1::IsBox, position, &mut elems),
             "cons?" => parse_prim1(ast::Op1::IsCons, position, &mut elems),
+            "vector?" => parse_prim1(ast::Op1::IsVector, position, &mut elems),
+            "string?" => parse_prim1(ast::Op1::IsString, position, &mut elems),
 
             "integer->char" => parse_prim1(ast::Op1::IntToChar, position, &mut elems),
             "char->integer" => parse_prim1(ast::Op1::CharToInt, position, &mut elems),
@@ -67,6 +70,12 @@ fn parse_list(list: &List, _position: Position) -> Result<ast::Expr, AstPasringE
             "=" => parse_prim2(ast::Op2::Equal, position, &mut elems),
 
             "cons" => parse_prim2(ast::Op2::Cons, position, &mut elems),
+            "make-vector" => parse_prim2(ast::Op2::MakeVector, position, &mut elems),
+            "make-string" => parse_prim2(ast::Op2::MakeString, position, &mut elems),
+            "vector-ref" => parse_prim2(ast::Op2::VectorRef, position, &mut elems),
+            "string-ref" => parse_prim2(ast::Op2::StringRef, position, &mut elems),
+
+            "vector-set!" => parse_prim3(ast::Op3::VectorSet, position, &mut elems),
 
             "begin" => parse_begin(&mut elems, position),
             "if" => parse_if(&mut elems, position),
@@ -137,6 +146,40 @@ fn parse_prim2<'a>(
         )),
         Some(expr) => Err(err(
             "Got more than 2 arguments for a binary operator.",
+            expr.position.clone(),
+        )),
+    }
+}
+
+fn parse_prim3<'a>(
+    operator: ast::Op3,
+    position: Position,
+    rest: &mut impl Iterator<Item = &'a Expr>,
+) -> Result<ast::Expr, AstPasringError> {
+    let operand_1 = rest
+        .next()
+        .ok_or(err("Missing first operand", position.clone()))?;
+    let operand_1 = parse_expr(&operand_1)?;
+
+    let operand_2 = rest
+        .next()
+        .ok_or(err("Missing second operand", position.clone()))?;
+    let operand_2 = parse_expr(&operand_2)?;
+
+    let operand_3 = rest
+        .next()
+        .ok_or(err("Missing third operand", position.clone()))?;
+    let operand_3 = parse_expr(&operand_3)?;
+
+    match rest.next() {
+        None => Ok(ast::Expr::Prim3(
+            operator,
+            Box::new(operand_1),
+            Box::new(operand_2),
+            Box::new(operand_3),
+        )),
+        Some(expr) => Err(err(
+            "Got more than 3 arguments for a ternary operator.",
             expr.position.clone(),
         )),
     }

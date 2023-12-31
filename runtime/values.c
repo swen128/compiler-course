@@ -8,6 +8,10 @@ type_t val_typeof(val_t x)
     return T_BOX;
   case cons_type_tag:
     return T_CONS;
+  case vect_type_tag:
+    return T_VECT;
+  case str_type_tag:
+    return T_STR;
   }
 
   if ((int_type_mask & x) == int_type_tag)
@@ -87,4 +91,22 @@ val_cons_t* val_unwrap_cons(val_t x)
 val_t val_wrap_cons(val_cons_t *c)
 {
   return ((val_t)c) | cons_type_tag;
+}
+
+val_vect_t* val_unwrap_vect(val_t x)
+{
+  return (val_vect_t *)(x ^ vect_type_tag);
+}
+val_t val_wrap_vect(val_vect_t *v)
+{
+  return ((val_t)v) | vect_type_tag;
+}
+
+val_str_t* val_unwrap_str(val_t x)
+{
+  return (val_str_t *)(x ^ str_type_tag);
+}
+val_t val_wrap_str(val_str_t *v)
+{
+  return ((val_t)v) | str_type_tag;
 }

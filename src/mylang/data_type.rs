@@ -9,8 +9,12 @@ pub enum Value {
     Eof,
     Void,
     EmptyList,
+    EmptyVector,
+    EmptyString,
     Cons(Address),
     Box(Address),
+    Vector(Address),
+    String(Address),
 }
 
 pub struct Address(pub i64);
@@ -24,12 +28,16 @@ impl Value {
 
             Value::Box(Address(a)) => BOX_TYPE.encode(a),
             Value::Cons(Address(a)) => CONS_TYPE.encode(a),
+            Value::Vector(Address(a)) => VECTOR_TYPE.encode(a),
+            Value::String(Address(a)) => STRING_TYPE.encode(a),
 
             Value::Boolean(true) => TRUE_TYPE.0 as i64,
             Value::Boolean(false) => FALSE_TYPE.0 as i64,
             Value::Eof => EOF_TYPE.0 as i64,
             Value::Void => VOID_TYPE.0 as i64,
             Value::EmptyList => EMPTY_TYPE.0 as i64,
+            Value::EmptyVector => VECTOR_TYPE.tag.0 as i64,
+            Value::EmptyString => STRING_TYPE.tag.0 as i64,
         }
     }
 }
@@ -69,8 +77,10 @@ impl UnaryType {
 // - Pointers
 //
 // Pointers are either:
-// - Boxes: end in #b001
-// - Cons:  end in #b010
+// - Boxes:  end in #b001
+// - Cons:   end in #b010
+// - Vector: end in #b011
+// - String: end in #b100
 //
 // Immediates are either
 // - Integers:   end in  #b0 000
@@ -90,6 +100,16 @@ pub const BOX_TYPE: UnaryType = UnaryType {
 pub const CONS_TYPE: UnaryType = UnaryType {
     shift: IMMEDIATE_SHIFT,
     tag: TypeTag(0b010),
+};
+
+pub const VECTOR_TYPE: UnaryType = UnaryType {
+    shift: IMMEDIATE_SHIFT,
+    tag: TypeTag(0b011),
+};
+
+pub const STRING_TYPE: UnaryType = UnaryType {
+    shift: IMMEDIATE_SHIFT,
+    tag: TypeTag(0b100),
 };
 
 pub const INT_TYPE: UnaryType = UnaryType {

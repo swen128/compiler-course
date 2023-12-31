@@ -126,6 +126,7 @@ fn print_operand(operand: &Operand) -> String {
 fn print_register(register: &Register) -> String {
     match register {
         Register::RAX => "rax".to_string(),
+        Register::EAX => "eax".to_string(),
         Register::RBX => "rbx".to_string(),
         Register::RDI => "rdi".to_string(),
         Register::RSP => "rsp".to_string(),

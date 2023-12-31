@@ -36,6 +36,7 @@ pub enum Operand {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Register {
     RAX,
+    EAX,
     RBX,
     RDI,
     RSP,

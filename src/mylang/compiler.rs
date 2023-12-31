@@ -1,14 +1,20 @@
 use super::ast::{self, Variable};
-use super::data_type::{UnaryType, Value, BOX_TYPE, CHAR_TYPE, CONS_TYPE, INT_TYPE};
+use super::data_type::{
+    UnaryType, Value, BOX_TYPE, CHAR_TYPE, CONS_TYPE, INT_TYPE, STRING_TYPE, VECTOR_TYPE,
+};
 use crate::a86::ast::*;
 
 const RAX: Operand = Operand::Register(Register::RAX);
+const EAX: Operand = Operand::Register(Register::EAX);
 const RBX: Operand = Operand::Register(Register::RBX);
 const RSP: Operand = Operand::Register(Register::RSP);
 const RDI: Operand = Operand::Register(Register::RDI);
 const R8: Operand = Operand::Register(Register::R8);
 const R9: Operand = Operand::Register(Register::R9);
+const R10: Operand = Operand::Register(Register::R10);
 const R15: Operand = Operand::Register(Register::R15);
+
+const ERR_LABEL: &str = "err";
 
 struct Compiler {
     last_label_id: usize,
@@ -94,7 +100,7 @@ pub fn compile(program: ast::Program) -> Program {
     statements.extend(compile_expr(program.expr, &mut compiler));
     statements.push(Statement::Ret);
     statements.push(Statement::Label {
-        name: "err".to_string(),
+        name: ERR_LABEL.to_string(),
     });
     statements.extend(pad_stack());
     statements.push(Statement::Call {
@@ -109,6 +115,8 @@ fn compile_expr(expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
 
         ast::Expr::Lit(lit) => compile_literal(lit),
 
+        ast::Expr::String(string) => compile_string_literal(&string),
+
         ast::Expr::Prim0(op) => match op {
             ast::Op0::ReadByte => compile_read_byte(),
             ast::Op0::PeekByte => compile_peek_byte(),
@@ -116,6 +124,9 @@ fn compile_expr(expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
 
         ast::Expr::Prim1(op, expr) => compile_prim1(op, *expr, compiler),
         ast::Expr::Prim2(op, first, second) => compile_prim2(op, *first, *second, compiler),
+        ast::Expr::Prim3(op, first, second, third) => {
+            compile_prim3(op, *first, *second, *third, compiler)
+        }
 
         ast::Expr::Begin(first, second) => compile_begin(*first, *second, compiler),
 
@@ -172,7 +183,29 @@ fn compile_prim2(
         dest: Operand::Register(Register::R8),
     });
     compiler.variables_table.pop();
-    statements.extend(compile_op2(op));
+    statements.extend(compile_op2(op, compiler));
+    statements
+}
+
+fn compile_prim3(
+    op: ast::Op3,
+    first: ast::Expr,
+    second: ast::Expr,
+    third: ast::Expr,
+    compiler: &mut Compiler,
+) -> Vec<Statement> {
+    let mut statements = compile_expr(first, compiler);
+    statements.push(Statement::Push {
+        src: Operand::Register(Register::RAX),
+    });
+    compiler.variables_table.push_non_variable();
+    statements.extend(compile_expr(second, compiler));
+    statements.push(Statement::Push {
+        src: Operand::Register(Register::RAX),
+    });
+    compiler.variables_table.push_non_variable();
+    statements.extend(compile_expr(third, compiler));
+    statements.extend(compile_op3(op, compiler));
     statements
 }
 
@@ -210,6 +243,8 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
         ast::Op1::IsChar => is_type(&CHAR_TYPE),
         ast::Op1::IsBox => is_type(&BOX_TYPE),
         ast::Op1::IsCons => is_type(&CONS_TYPE),
+        ast::Op1::IsVector => is_type(&VECTOR_TYPE),
+        ast::Op1::IsString => is_type(&STRING_TYPE),
 
         ast::Op1::IsEof => {
             let mut statements = vec![Statement::Cmp {
@@ -309,7 +344,7 @@ fn compile_op1(op: ast::Op1) -> Vec<Statement> {
 
 /// Returns instructions which apply the given binary operator to the values in
 /// r8 (first operand) and rax (second operand).
-fn compile_op2(op: ast::Op2) -> Vec<Statement> {
+fn compile_op2(op: ast::Op2, compiler: &mut Compiler) -> Vec<Statement> {
     match op {
         ast::Op2::Add => {
             let mut statements = assert_int(Register::RAX);
@@ -369,7 +404,452 @@ fn compile_op2(op: ast::Op2) -> Vec<Statement> {
                 },
             ]
         }
+
+        ast::Op2::MakeVector => compile_make_vector(compiler),
+        ast::Op2::MakeString => compile_make_string(compiler),
+        ast::Op2::VectorRef => compile_vector_ref(compiler),
+        ast::Op2::StringRef => compile_string_ref(compiler),
     }
+}
+
+/// Returns instructions which apply the given ternary operator to the arguments,
+/// which are assumed to be laid out as follows:
+/// * 3rd argument: rax
+/// * 2nd argument: Topmost of the stack
+/// * 1st argument: Second of the stack
+fn compile_op3(op: ast::Op3, compiler: &mut Compiler) -> Vec<Statement> {
+    match op {
+        ast::Op3::VectorSet => {
+            // 1st argument (vector): r8
+            // 2nd argument (index): r10
+            // 3rd argument (new value): rax
+            let mut statements = vec![
+                Statement::Pop {
+                    dest: Operand::Register(Register::R10),
+                },
+                Statement::Pop {
+                    dest: Operand::Register(Register::R8),
+                },
+            ];
+            compiler.variables_table.pop();
+            compiler.variables_table.pop();
+            statements.extend(assert_vector(Register::R8));
+            statements.extend(assert_natural_number(Register::R10));
+
+            // Cast r8 to the raw pointer address of the vector.
+            statements.push(Statement::Xor {
+                dest: R8,
+                src: Operand::Immediate(VECTOR_TYPE.tag.0 as i64),
+            });
+            // Set r9 to the length of the vector.
+            statements.push(Statement::Mov {
+                dest: R9,
+                src: Operand::Offset(Register::R8, 0),
+            });
+            // Cast r10 to raw integer representing the index.
+            statements.push(Statement::Sar {
+                dest: R10,
+                src: Operand::Immediate(INT_TYPE.shift as i64),
+            });
+
+            // Check if the index is out of bounds. (length - 1 < index)
+            statements.push(Statement::Sub {
+                dest: R9,
+                src: Operand::Immediate(1),
+            });
+            statements.push(Statement::Cmp { dest: R9, src: R10 });
+            statements.push(Statement::Jl {
+                label: ERR_LABEL.to_string(),
+            });
+
+            // Set the new value.
+            statements.push(Statement::Sal {
+                dest: R10,
+                src: Operand::Immediate(3), // Multiply by 2^3 = 8 = 1 word
+            });
+            statements.push(Statement::Add { dest: R8, src: R10 });
+            statements.push(Statement::Mov {
+                dest: Operand::Offset(Register::R8, 8), // The offset 8 is required as the first word is the length.
+                src: RAX,
+            });
+
+            // Return void.
+            statements.push(Statement::Mov {
+                dest: RAX,
+                src: Operand::from(Value::Void),
+            });
+            statements
+        }
+    }
+}
+
+/// Returns instructions to initialize a vector of the given length with the repeated values,
+/// assuming the length and the value is already given in r8 and rax respectively.
+fn compile_make_vector(compiler: &mut Compiler) -> Vec<Statement> {
+    let mut statements = assert_natural_number(Register::R8);
+
+    let loop_label = format!("loop_{}", compiler.new_label_id());
+    let end_label = format!("end_{}", compiler.new_label_id());
+    let empty_label = format!("empty_{}", compiler.new_label_id());
+
+    // Special case for empty vector
+    statements.push(Statement::Cmp {
+        dest: R8,
+        src: Operand::from(Value::Int(0)),
+    });
+    statements.push(Statement::Je {
+        label: empty_label.clone(),
+    });
+
+    // Stash the top address and cast it to the vector type.
+    statements.push(Statement::Mov { dest: R9, src: RBX });
+    statements.push(Statement::Or {
+        dest: R9,
+        src: Operand::Immediate(VECTOR_TYPE.tag.0 as i64),
+    });
+
+    // Put the length of the vector at the beginning.
+    // Note: The length is guaranteed to be an integer, so we can strip the type tag.
+    statements.push(Statement::Sar {
+        dest: R8,
+        src: Operand::Immediate(INT_TYPE.shift as i64),
+    });
+    statements.push(Statement::Mov {
+        dest: Operand::Offset(Register::RBX, 0),
+        src: R8,
+    });
+    statements.push(Statement::Add {
+        dest: RBX,
+        src: Operand::Immediate(8),
+    });
+
+    // Initialize each element of the vector to the given value.
+    statements.push(Statement::Label {
+        name: loop_label.clone(),
+    });
+    statements.push(Statement::Mov {
+        dest: Operand::Offset(Register::RBX, 0),
+        src: RAX,
+    });
+    statements.push(Statement::Add {
+        dest: RBX,
+        src: Operand::Immediate(8),
+    });
+    statements.push(Statement::Sub {
+        dest: R8,
+        src: Operand::Immediate(1),
+    });
+    statements.push(Statement::Cmp {
+        dest: R8,
+        src: Operand::Immediate(0),
+    });
+    statements.push(Statement::Jne {
+        label: loop_label.clone(),
+    });
+
+    // Return the vector.
+    statements.push(Statement::Mov { dest: RAX, src: R9 });
+    statements.push(Statement::Jmp {
+        label: end_label.clone(),
+    });
+
+    // Special case for empty vector
+    statements.push(Statement::Label {
+        name: empty_label.clone(),
+    });
+    statements.push(Statement::Mov {
+        dest: RAX,
+        src: Operand::from(Value::EmptyVector),
+    });
+
+    statements.push(Statement::Label {
+        name: end_label.clone(),
+    });
+    statements
+}
+
+/// Returns instructions to initialize a string of the given length with the repeated values,
+/// assuming the length and the value is already given in r8 and rax respectively.
+fn compile_make_string(compiler: &mut Compiler) -> Vec<Statement> {
+    let mut statements = assert_natural_number(Register::R8);
+    statements.extend(assert_char(Register::RAX));
+
+    let loop_label = format!("loop_{}", compiler.new_label_id());
+    let end_label = format!("end_{}", compiler.new_label_id());
+    let empty_label = format!("empty_{}", compiler.new_label_id());
+
+    // Special case for empty string
+    statements.push(Statement::Cmp {
+        dest: R8,
+        src: Operand::from(Value::Int(0)),
+    });
+    statements.push(Statement::Je {
+        label: empty_label.clone(),
+    });
+
+    // Stash the top address and cast it to the string type.
+    statements.push(Statement::Mov { dest: R9, src: RBX });
+    statements.push(Statement::Or {
+        dest: R9,
+        src: Operand::Immediate(STRING_TYPE.tag.0 as i64),
+    });
+
+    // Put the length of the string at the beginning.
+    // Note: The length is guaranteed to be an integer, so we can strip the type tag.
+    statements.push(Statement::Sar {
+        dest: R8,
+        src: Operand::Immediate(INT_TYPE.shift as i64),
+    });
+    statements.push(Statement::Mov {
+        dest: Operand::Offset(Register::RBX, 0),
+        src: R8,
+    });
+    statements.push(Statement::Add {
+        dest: RBX,
+        src: Operand::Immediate(8),
+    });
+
+    // Each element of the string is guaranteed to be a character, so we can strip the type tag.
+    statements.push(Statement::Sar {
+        dest: RAX,
+        src: Operand::Immediate(CHAR_TYPE.shift as i64),
+    });
+
+    // Unlike the vector, each element of the string only takes up 32 bits (4 bytes).
+    // This breaks the 8-bytes alignment of the heap when the length is odd.
+    // To fix this, we pad the array with extra 4 bytes if the length is odd.
+    statements.push(Statement::Add {
+        dest: R8,
+        src: Operand::Immediate(1),
+    });
+    statements.push(Statement::Sar {
+        dest: R8,
+        src: Operand::Immediate(1),
+    });
+    statements.push(Statement::Sal {
+        dest: R8,
+        src: Operand::Immediate(1),
+    });
+
+    // Initialize each element of the string to the given value.
+    statements.push(Statement::Label {
+        name: loop_label.clone(),
+    });
+    statements.push(Statement::Mov {
+        dest: Operand::Offset(Register::RBX, 0),
+        src: EAX,
+    });
+    statements.push(Statement::Add {
+        dest: RBX,
+        src: Operand::Immediate(4), // 4 bytes per character
+    });
+    statements.push(Statement::Sub {
+        dest: R8,
+        src: Operand::Immediate(1),
+    });
+    statements.push(Statement::Cmp {
+        dest: R8,
+        src: Operand::Immediate(0),
+    });
+    statements.push(Statement::Jne {
+        label: loop_label.clone(),
+    });
+
+    // Return the string.
+    statements.push(Statement::Mov { dest: RAX, src: R9 });
+    statements.push(Statement::Jmp {
+        label: end_label.clone(),
+    });
+
+    // Special case for empty string
+    statements.push(Statement::Label {
+        name: empty_label.clone(),
+    });
+    statements.push(Statement::Mov {
+        dest: RAX,
+        src: Operand::from(Value::EmptyString),
+    });
+
+    statements.push(Statement::Label {
+        name: end_label.clone(),
+    });
+    statements
+}
+
+fn compile_string_literal(string: &str) -> Vec<Statement> {
+    if string.is_empty() {
+        return compile_empty_string();
+    }
+
+    let mut statements = vec![];
+
+    // Stash the top address and cast it to the string type.
+    statements.push(Statement::Mov { dest: R9, src: RBX });
+    statements.push(Statement::Or {
+        dest: R9,
+        src: Operand::Immediate(STRING_TYPE.tag.0 as i64),
+    });
+
+    // Put the length of the string at the beginning.
+    // Note: The length is guaranteed to be an integer, so we can strip the type tag.
+    statements.push(Statement::Mov {
+        dest: RAX,
+        src: Operand::Immediate(string.len() as i64),
+    });
+    statements.push(Statement::Mov {
+        dest: Operand::Offset(Register::RBX, 0),
+        src: RAX,
+    });
+    statements.push(Statement::Add {
+        dest: RBX,
+        src: Operand::Immediate(8),
+    });
+
+    for c in string.chars() {
+        statements.push(Statement::Mov {
+            dest: EAX,
+            src: Operand::Immediate(c as i64), // Each element is guaranteed to be a character, so the type tag is not needed.
+        });
+        statements.push(Statement::Mov {
+            dest: Operand::Offset(Register::RBX, 0),
+            src: EAX,
+        });
+        statements.push(Statement::Add {
+            dest: RBX,
+            src: Operand::Immediate(4), // 4 bytes per character
+        });
+    }
+
+    // Return the string.
+    statements.push(Statement::Mov { dest: RAX, src: R9 });
+    statements
+}
+
+fn compile_empty_string() -> Vec<Statement> {
+    vec![Statement::Mov {
+        dest: RAX,
+        src: Operand::from(Value::EmptyString),
+    }]
+}
+
+/// Returns instructions which sets rax to the element in the vector at the given index,
+/// assuming the vector and the index is already given in r8 and rax respectively.
+fn compile_vector_ref(_compiler: &mut Compiler) -> Vec<Statement> {
+    let mut statements = assert_vector(Register::R8);
+    statements.extend(assert_natural_number(Register::RAX));
+
+    // Special case for empty vector
+    statements.push(Statement::Cmp {
+        dest: R8,
+        src: Operand::from(Value::EmptyVector),
+    });
+    statements.push(Statement::Je {
+        label: ERR_LABEL.to_string(),
+    });
+
+    // Cast r8 to the raw pointer address of the vector.
+    statements.push(Statement::Xor {
+        dest: R8,
+        src: Operand::Immediate(VECTOR_TYPE.tag.0 as i64),
+    });
+    // Set r9 to the length of the vector.
+    statements.push(Statement::Mov {
+        dest: R9,
+        src: Operand::Offset(Register::R8, 0),
+    });
+    // Cast rax to raw integer representing the index.
+    statements.push(Statement::Sar {
+        dest: RAX,
+        src: Operand::Immediate(INT_TYPE.shift as i64),
+    });
+
+    // Check if the index is out of bounds. (length - 1 < index)
+    statements.push(Statement::Sub {
+        dest: R9,
+        src: Operand::Immediate(1),
+    });
+    statements.push(Statement::Cmp { dest: R9, src: RAX });
+    statements.push(Statement::Jl {
+        label: ERR_LABEL.to_string(),
+    });
+
+    // Get the element at the given index.
+    statements.push(Statement::Sal {
+        dest: RAX,
+        src: Operand::Immediate(3), // Each element takes up 2^3 bytes.
+    });
+    statements.push(Statement::Add { dest: R8, src: RAX });
+    statements.push(Statement::Mov {
+        dest: RAX,
+        src: Operand::Offset(Register::R8, 8), // The offset 8 is required as the first word is the length.
+    });
+
+    statements
+}
+
+/// Returns instructions which sets rax to the character in the string at the given index,
+/// assuming the string and the index is already given in r8 and rax respectively.
+fn compile_string_ref(_compiler: &mut Compiler) -> Vec<Statement> {
+    let mut statements = assert_string(Register::R8);
+    statements.extend(assert_natural_number(Register::RAX));
+
+    // Special case for empty string
+    statements.push(Statement::Cmp {
+        dest: R8,
+        src: Operand::from(Value::EmptyString),
+    });
+    statements.push(Statement::Je {
+        label: ERR_LABEL.to_string(),
+    });
+
+    // Cast r8 to the raw pointer address of the string.
+    statements.push(Statement::Xor {
+        dest: R8,
+        src: Operand::Immediate(STRING_TYPE.tag.0 as i64),
+    });
+    // Set r9 to the length of the string.
+    statements.push(Statement::Mov {
+        dest: R9,
+        src: Operand::Offset(Register::R8, 0),
+    });
+    // Cast rax to raw integer representing the index.
+    statements.push(Statement::Sar {
+        dest: RAX,
+        src: Operand::Immediate(INT_TYPE.shift as i64),
+    });
+
+    // Check if the index is out of bounds. (length - 1 < index)
+    statements.push(Statement::Sub {
+        dest: R9,
+        src: Operand::Immediate(1),
+    });
+    statements.push(Statement::Cmp { dest: R9, src: RAX });
+    statements.push(Statement::Jl {
+        label: ERR_LABEL.to_string(),
+    });
+
+    // Get the element at the given index.
+    statements.push(Statement::Sal {
+        dest: RAX,
+        src: Operand::Immediate(2), // Each element takes up 2^2 bytes.
+    });
+    statements.push(Statement::Add { dest: R8, src: RAX });
+    statements.push(Statement::Mov {
+        dest: EAX,
+        src: Operand::Offset(Register::R8, 8), // The offset 8 is required as the first word is the length.
+    });
+
+    // Cast rax to the character type.
+    statements.push(Statement::Sal {
+        dest: RAX,
+        src: Operand::Immediate(CHAR_TYPE.shift as i64),
+    });
+    statements.push(Statement::Xor {
+        dest: RAX,
+        src: Operand::Immediate(CHAR_TYPE.tag.0 as i64),
+    });
+
+    statements
 }
 
 /// Returns instructions which sets rax to true if the comparison flag is equal.
@@ -512,7 +992,7 @@ fn assert_type(register: Register, type_: &UnaryType) -> Vec<Statement> {
             src: Operand::Immediate(type_.tag.0 as i64),
         },
         Statement::Jne {
-            label: "err".to_string(),
+            label: ERR_LABEL.to_string(),
         },
     ]
 }
@@ -533,6 +1013,26 @@ fn assert_cons(register: Register) -> Vec<Statement> {
     assert_type(register, &CONS_TYPE)
 }
 
+fn assert_vector(register: Register) -> Vec<Statement> {
+    assert_type(register, &VECTOR_TYPE)
+}
+
+fn assert_string(register: Register) -> Vec<Statement> {
+    assert_type(register, &STRING_TYPE)
+}
+
+fn assert_natural_number(register: Register) -> Vec<Statement> {
+    let mut statements = assert_int(register.clone());
+    statements.push(Statement::Cmp {
+        dest: Operand::Register(register),
+        src: Operand::from(Value::Int(0)),
+    });
+    statements.push(Statement::Jl {
+        label: ERR_LABEL.to_string(),
+    });
+    statements
+}
+
 fn assert_codepoint() -> Vec<Statement> {
     let mut statements = assert_int(Register::RAX);
 
@@ -542,14 +1042,14 @@ fn assert_codepoint() -> Vec<Statement> {
         src: Operand::from(Value::Int(0)),
     });
     statements.push(Statement::Jl {
-        label: "err".to_string(),
+        label: ERR_LABEL.to_string(),
     });
     statements.push(Statement::Cmp {
         dest: RAX,
         src: Operand::from(Value::Int(0x10FFFF)),
     });
     statements.push(Statement::Jg {
-        label: "err".to_string(),
+        label: ERR_LABEL.to_string(),
     });
 
     // except for the range 55296..=57343.
@@ -568,7 +1068,7 @@ fn assert_codepoint() -> Vec<Statement> {
         label: "ok".to_string(),
     });
     statements.push(Statement::Jmp {
-        label: "err".to_string(),
+        label: ERR_LABEL.to_string(),
     });
     statements.push(Statement::Label {
         name: "ok".to_string(),
@@ -585,14 +1085,14 @@ fn assert_byte(register: Register) -> Vec<Statement> {
         src: Operand::from(Value::Int(0)),
     });
     statements.push(Statement::Jl {
-        label: "err".to_string(),
+        label: ERR_LABEL.to_string(),
     });
     statements.push(Statement::Cmp {
         dest: R9,
         src: Operand::from(Value::Int(255)),
     });
     statements.push(Statement::Jg {
-        label: "err".to_string(),
+        label: ERR_LABEL.to_string(),
     });
 
     statements

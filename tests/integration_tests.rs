@@ -281,11 +281,130 @@ fn is_not_cons() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn make_vector() {
+    let input = "(make-vector 3 42)";
+    let result = run(input).unwrap();
+    let expected = "'#(42 42 42)";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_vector() {
+    let input = "(vector? (make-vector 3 42))";
+    let result = run(input).unwrap();
+    let expected = "#t";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_not_vector() {
+    let input = "(vector? 42)";
+    let result = run(input).unwrap();
+    let expected = "#f";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn vector_ref() {
+    let input = "(vector-ref (make-vector 3 42) 1)";
+    let result = run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn vector_ref_out_of_bounds() {
+    let input = "(vector-ref (make-vector 3 42) 3)";
+    let result = run(input).unwrap_err();
+    assert_eq!(result, Error::RuntimeError);
+}
+
+#[test]
+fn vector_set() {
+    let input = "(let ((v (make-vector 3 42))) (begin (vector-set! v 1 43) v))";
+    let result = run(input).unwrap();
+    let expected = "'#(42 43 42)";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn empty_vector() {
+    let input = "(make-vector 0 42)";
+    let result = run(input).unwrap();
+    let expected = "'#()";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn make_string() {
+    let input = "(make-string 3 #\\a)";
+    let result = run(input).unwrap();
+    let expected = "\"aaa\"";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_string() {
+    let input = "(string? (make-string 3 #\\a))";
+    let result = run(input).unwrap();
+    let expected = "#t";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn is_not_string() {
+    let input = "(string? 42)";
+    let result = run(input).unwrap();
+    let expected = "#f";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn string_literal() {
+    let input = "\"abc\"";
+    let result = run(input).unwrap();
+    let expected = "\"abc\"";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn string_ref() {
+    let input = "(string-ref \"abc\" 1)";
+    let result = run(input).unwrap();
+    let expected = "#\\b";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn string_out_of_bounds() {
+    let input = "(string-ref \"abc\" 3)";
+    let result = run(input).unwrap_err();
+    assert_eq!(result, Error::RuntimeError);
+}
+
+#[test]
+fn empty_string() {
+    let input = "(make-string 0 #\\a)";
+    let result = run(input).unwrap();
+    let expected = "\"\"";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn empty_string_literal() {
+    let input = "\"\"";
+    let result = run(input).unwrap();
+    let expected = "\"\"";
+    assert_eq!(result, expected);
+}
+
 fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
     use std::process::{Command, Stdio};
 
     let asm = compile(source)?;
+    println!("{}", asm);
 
     let asm_filename = format!("out/{}.asm", hash_str(&asm));
     let asm_output = format!("out/{}.o", hash_str(&asm));
