@@ -97,7 +97,6 @@ fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Res
                 parse_list(tokens, position.clone()).map(|list| Expr::list(list, position))
             }
             TokenKind::ParenClose => Err(err("Unmatched parenthesis ')'", position)),
-            TokenKind::Minus => parse_negative_int(tokens, position),
             TokenKind::Integer(i) => Ok(Expr::int(i, position)),
             TokenKind::Symbol(s) => Ok(Expr::symbol(&s, position)),
             TokenKind::Boolean(b) => Ok(Expr::bool(b, position)),
@@ -125,25 +124,6 @@ fn parse_list(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Res
         }
     }
     Err(err("Unmatched parenthesis '('", position))
-}
-
-fn parse_negative_int(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Result<Expr> {
-    match tokens.next() {
-        Some(Token {
-            token: TokenKind::Integer(i),
-            position,
-        }) => Ok(Expr::int(-i, position)),
-
-        Some(Token { token, position }) => Err(err(
-            &format!("Expected an integer. Got {:?}", token),
-            position,
-        )),
-
-        None => Err(err(
-            "Expected an integer after minus sign. Got EOF instead.",
-            position,
-        )),
-    }
 }
 
 fn err(msg: &str, position: Position) -> SexpParsingError {

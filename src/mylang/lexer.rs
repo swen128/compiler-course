@@ -11,13 +11,10 @@ pub enum TokenKind {
     #[token(")")]
     ParenClose,
 
-    #[token("-")]
-    Minus,
-
-    #[regex(r"[0-9]+", |lex| lex.slice().parse().ok())]
+    #[regex(r"-?[0-9]+", |lex| lex.slice().parse().ok(), priority=2)]
     Integer(i64),
 
-    #[regex(r"[^\s\-()0-9][^\s()]*", |lex| lex.slice().to_string())]
+    #[regex(r"[^\s()0-9][^\s()]*", |lex| lex.slice().to_string())]
     Symbol(String),
 
     #[regex(r"#[tf]", parse_bool)]

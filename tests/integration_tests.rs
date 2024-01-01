@@ -17,6 +17,22 @@ fn it_adds_and_subtracts() {
 }
 
 #[test]
+fn plus_operator() {
+    let input = "(+ 1 2)";
+    let result = run(input).unwrap();
+    let expected = "3";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn minus_operator() {
+    let input = "(- -2 -1)";
+    let result = run(input).unwrap();
+    let expected = "-1";
+    assert_eq!(result, expected);
+}
+
+#[test]
 fn invalid_syntax() {
     let input = "((add1 (sub1 (add1 42))))";
     let result = run(input);
