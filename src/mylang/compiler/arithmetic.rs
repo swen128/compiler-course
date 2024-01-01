@@ -19,11 +19,12 @@ pub fn compile_add() -> Vec<Statement> {
     statements
 }
 
-/// Returns instructions which subtracts two integers in rax and r8.
+/// Returns instructions which returns integer value of `r8 - rax`.
 pub fn compile_sub() -> Vec<Statement> {
     let mut statements = assert_int(Register::RAX);
     statements.extend(assert_int(Register::R8));
-    statements.push(Statement::Sub { dest: RAX, src: R8 });
+    statements.push(Statement::Sub { dest: R8, src: RAX });
+    statements.push(Statement::Mov { dest: RAX, src: R8 });
     statements
 }
 
