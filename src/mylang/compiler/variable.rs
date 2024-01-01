@@ -1,6 +1,6 @@
 use crate::{
     a86::ast::{Operand, Register, Statement},
-    mylang::ast::{self, Variable},
+    mylang::ast::{self, Identifier},
 };
 
 use super::{state::Compiler, expr::compile_expr};
@@ -25,7 +25,7 @@ pub fn compile_let(expr: ast::Let, compiler: &mut Compiler) -> Vec<Statement> {
     statements
 }
 
-pub fn compile_variable(variable: Variable, compiler: &mut Compiler) -> Vec<Statement> {
+pub fn compile_variable(variable: Identifier, compiler: &mut Compiler) -> Vec<Statement> {
     let position = compiler
         .variables_table
         .position(&variable)

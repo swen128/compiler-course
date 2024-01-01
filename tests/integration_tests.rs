@@ -399,6 +399,22 @@ fn empty_string_literal() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn function_call() {
+    let input = "(define (f x y) (+ x y)) (f 42 1)";
+    let result = run(input).unwrap();
+    let expected = "43";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn several_function_definitions() {
+    let input = "(define (f x y) (+ x y)) (define (g x) (add1 x )) (f 42 (g 7))";
+    let result = run(input).unwrap();
+    let expected = "50";
+    assert_eq!(result, expected);
+}
+
 fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
     use std::process::{Command, Stdio};

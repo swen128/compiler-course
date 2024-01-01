@@ -19,6 +19,7 @@ mod string;
 mod types;
 mod variable;
 mod vector;
+mod function;
 
 const RBX: Operand = Operand::Register(Register::RBX);
 const RDI: Operand = Operand::Register(Register::RDI);
@@ -39,5 +40,10 @@ pub fn compile(program: ast::Program) -> Program {
     statements.extend(compile_expr(program.expr, &mut compiler));
     statements.push(Statement::Ret);
     statements.extend(compile_error_handler());
+    
+    for function_definition in program.function_definitions {
+        statements.extend(function::compile_function_definition(function_definition, &mut compiler));
+    }
+
     Program { statements }
 }

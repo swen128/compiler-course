@@ -46,6 +46,7 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Pop { dest } => format!("\tpop {}", print_operand(dest)),
         Statement::Add { dest, src } => print_add(dest, src),
         Statement::Sub { dest, src } => print_sub(dest, src),
+        Statement::Lea { dest, label } => print_lea(dest, label, context),
         Statement::Call { label } => print_call(label, context),
         Statement::Ret => "\tret".to_string(),
     }
@@ -93,6 +94,14 @@ fn print_add(dest: &Operand, src: &Operand) -> String {
 
 fn print_sub(dest: &Operand, src: &Operand) -> String {
     format!("\tsub {}, {}", print_operand(dest), print_operand(src))
+}
+
+fn print_lea(dest: &Operand, label: &String, context: &CompilationContext) -> String {
+    format!(
+        "\tlea {}, {}",
+        print_operand(dest),
+        print_label(label, &context)
+    )
 }
 
 fn print_call(label: &String, context: &CompilationContext) -> String {

@@ -76,9 +76,16 @@ impl Expr {
 
 type Result<T> = std::result::Result<T, SexpParsingError>;
 
-pub fn parse(tokens: Vec<Token>) -> Result<Expr> {
+pub fn parse(tokens: Vec<Token>) -> Result<Vec<Expr>> {
+    let mut expressions = vec![];
     let mut tokens_iter = tokens.into_iter().peekable();
-    parse_expr(&mut tokens_iter, Position::zero())
+    
+    while let Some(Token{token: _, position}) = tokens_iter.peek() {
+        let position = position.clone();
+        let expr = parse_expr(&mut tokens_iter, position)?;
+        expressions.push(expr);
+    }
+    Ok(expressions)
 }
 
 fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Result<Expr> {

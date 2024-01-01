@@ -11,6 +11,6 @@ pub use error::ParserError;
 
 pub fn parse(source: &str) -> Result<ast::Program, ParserError> {
     let tokens = lexer::tokenize(source)?;
-    let expr = s_expression::parse(tokens)?;
-    parser::parse(&expr).or_else(|err| Err(ParserError::from(err)))
+    let s_expressions = s_expression::parse(tokens)?;
+    parser::parse(&s_expressions).or_else(|err| Err(ParserError::from(err)))
 }

@@ -2,6 +2,7 @@ use crate::a86::ast::*;
 use crate::mylang::ast;
 use crate::mylang::data_type::Value;
 
+use super::function::compile_function_application;
 use super::primitive_functions::{compile_prim0, compile_prim1, compile_prim2, compile_prim3};
 use super::state::Compiler;
 use super::string::compile_string_literal;
@@ -28,6 +29,8 @@ pub fn compile_expr(expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> 
 
         ast::Expr::Variable(variable) => compile_variable(variable, compiler),
         ast::Expr::Let(let_expr) => compile_let(let_expr, compiler),
+
+        ast::Expr::App(app) => compile_function_application(app, compiler),
     }
 }
 

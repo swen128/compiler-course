@@ -21,6 +21,7 @@ pub enum Statement {
     Pop { dest: Operand },
     Add { dest: Operand, src: Operand },
     Sub { dest: Operand, src: Operand },
+    Lea { dest: Operand, label: String },
     Call { label: String },
     Ret,
 }

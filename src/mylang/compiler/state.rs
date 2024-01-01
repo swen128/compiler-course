@@ -1,4 +1,4 @@
-use crate::mylang::ast::Variable;
+use crate::mylang::ast::Identifier;
 
 pub struct Compiler {
     last_label_id: usize,
@@ -20,7 +20,7 @@ impl Compiler {
 }
 
 pub struct VariablesTable {
-    variables: Vec<Option<Variable>>,
+    variables: Vec<Option<Identifier>>,
 }
 
 /// Keeps track of local variables, mapping them to lexical addresses.
@@ -33,7 +33,7 @@ impl VariablesTable {
 
     /// Pushes a new variable to the stack.
     /// This should be called when binding a new variable in the `let` expression.
-    pub fn push_variable(&mut self, variable: Variable) {
+    pub fn push_variable(&mut self, variable: Identifier) {
         self.variables.push(Some(variable));
     }
 
@@ -47,7 +47,7 @@ impl VariablesTable {
         self.variables.pop();
     }
 
-    pub fn position(&self, variable: &Variable) -> Option<usize> {
+    pub fn position(&self, variable: &Identifier) -> Option<usize> {
         self.variables
             .iter()
             .position(|option| option.as_ref().is_some_and(|v| v == variable))
@@ -62,18 +62,18 @@ mod tests {
     #[test]
     fn variable_position() {
         let mut variables_table = VariablesTable::new();
-        variables_table.push_variable(Variable("a".to_string()));
-        variables_table.push_variable(Variable("b".to_string()));
-        variables_table.push_variable(Variable("c".to_string()));
+        variables_table.push_variable(Identifier("a".to_string()));
+        variables_table.push_variable(Identifier("b".to_string()));
+        variables_table.push_variable(Identifier("c".to_string()));
         variables_table.pop();
         assert_eq!(
-            variables_table.position(&Variable("a".to_string())),
+            variables_table.position(&Identifier("a".to_string())),
             Some(1)
         );
         assert_eq!(
-            variables_table.position(&Variable("b".to_string())),
+            variables_table.position(&Identifier("b".to_string())),
             Some(0)
         );
-        assert_eq!(variables_table.position(&Variable("c".to_string())), None);
+        assert_eq!(variables_table.position(&Identifier("c".to_string())), None);
     }
 }

@@ -8,8 +8,9 @@ pub enum Expr {
     Prim2(Op2, Box<Expr>, Box<Expr>),
     Prim3(Op3, Box<Expr>, Box<Expr>, Box<Expr>),
     Begin(Box<Expr>, Box<Expr>),
-    Variable(Variable),
+    Variable(Identifier),
     Let(Let),
+    App(App),
     If(If),
 }
 
@@ -21,18 +22,24 @@ pub struct Let {
 
 #[derive(Debug)]
 pub struct Binding {
-    pub lhs: Variable,
+    pub lhs: Identifier,
     pub rhs: Box<Expr>,
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Identifier(pub String);
 
-pub struct Variable(pub String);
-
-impl Variable {
-    pub fn new(s: &str) -> Variable {
-        Variable(s.to_owned())
+impl Identifier {
+    pub fn new(s: &str) -> Identifier {
+        Identifier(s.to_owned())
     }
+}
+
+/// Function application.
+#[derive(Debug)]
+pub struct App {
+    pub function: Identifier,
+    pub args: Vec<Expr>,
 }
 
 #[derive(Debug)]
@@ -107,5 +114,18 @@ pub enum Op3 {
 
 #[derive(Debug)]
 pub struct Program {
+    pub function_definitions: Vec<FunctionDefinition>,
     pub expr: Expr,
+}
+
+#[derive(Debug)]
+pub struct FunctionDefinition {
+    pub signature: FunctionSignature,
+    pub body: Expr,
+}
+
+#[derive(Debug)]
+pub struct FunctionSignature {
+    pub name: Identifier,
+    pub params: Vec<Identifier>,
 }
