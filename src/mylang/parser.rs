@@ -1,18 +1,19 @@
-use super::ast::{self, Binding, FunctionSignature, Identifier};
+use super::ast;
 use super::document::Position;
 use super::error::AstPasringError;
 use super::s_expression::{Atom, Expr, ExprKind, List};
 
-pub fn parse(s_expressions: &Vec<Expr>) -> Result<ast::Program, AstPasringError> {
-    let (last, rest) = s_expressions.split_last().ok_or(AstPasringError {
-        msg: "Empty program".to_owned(),
-        position: Position::zero(),
-    })?;
+type Result<T> = std::result::Result<T, super::error::AstPasringError>;
+
+pub fn parse(s_expressions: &Vec<Expr>) -> Result<ast::Program> {
+    let (last, rest) = s_expressions
+        .split_last()
+        .ok_or(err("Empty program.", Position::zero()))?;
 
     let function_definitions = rest
         .iter()
         .map(|expr| parse_function_definition(expr))
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>>>()?;
     let expr = parse_expr(last)?;
 
     Ok(ast::Program {
@@ -21,65 +22,241 @@ pub fn parse(s_expressions: &Vec<Expr>) -> Result<ast::Program, AstPasringError>
     })
 }
 
-pub fn parse_expr(expr: &Expr) -> Result<ast::Expr, AstPasringError> {
-    let position = expr.position.clone();
+pub fn parse_expr(expr: &Expr) -> Result<ast::Expr> {
     match &expr.kind {
-        ExprKind::Atom(atom) => parse_literal(&atom, position),
-        ExprKind::List(list) => parse_list(&list, position),
+        ExprKind::Atom(atom) => parse_literal(&atom),
+        ExprKind::List(list) => parse_list(&list),
     }
 }
 
-/// Parse a function definition of the form: `(define (<name> <param> <param> ...) <body>)`
-fn parse_function_definition(expr: &Expr) -> Result<ast::FunctionDefinition, AstPasringError> {
-    let position = expr.position.clone();
-    match &expr.kind {
-        ExprKind::List(list) => parse_function_definition_list(list, &position),
-
-        ExprKind::Atom(a) => Err(AstPasringError {
-            msg: format!(
-                "Expected a function definition. Got an atom instead: {:?}",
-                a
-            ),
-            position,
-        }),
+fn parse_literal(atom: &Atom) -> Result<ast::Expr> {
+    match atom {
+        Atom::Integer(n) => Ok(ast::Expr::Lit(ast::Lit::Int(*n))),
+        Atom::Boolean(b) => Ok(ast::Expr::Lit(ast::Lit::Bool(*b))),
+        Atom::Character(c) => Ok(ast::Expr::Lit(ast::Lit::Char(*c))),
+        Atom::String(s) => Ok(ast::Expr::String(s.to_owned())),
+        Atom::Symbol(s) => match s.as_str() {
+            "eof" => Ok(ast::Expr::Eof),
+            _ => Ok(ast::Expr::Variable(ast::Identifier::new(s))),
+        },
     }
 }
 
-/// Parse a function definition of the form: `(define (<name> <param> <param> ...) <body>)`
-fn parse_function_definition_list(
-    list: &List,
-    position: &Position,
-) -> Result<ast::FunctionDefinition, AstPasringError> {
-    let List(elems) = list;
-    let mut elems = elems.iter();
+fn parse_list(List(elems): &List) -> Result<ast::Expr> {
+    match elems.as_slice() {
+        [] => Ok(ast::Expr::Lit(ast::Lit::EmptyList)),
 
-    let define = elems
-        .next()
-        .ok_or(err("Missing `define` keyword", position.clone()))?;
-    parse_define_keyword(define)?;
+        [head, rest @ ..] => {
+            let position = head.position.clone();
 
-    let signature = elems.next().ok_or(err(
-        "Missing function name and parameters",
-        position.clone(),
-    ))?;
-    let signature = parse_function_signature(signature)?;
+            match &head.kind {
+                ExprKind::Atom(Atom::Symbol(s)) => match s.as_str() {
+                    "read-byte" => parse_prim0(ast::Op0::ReadByte, position, rest),
+                    "peek-byte" => parse_prim0(ast::Op0::PeekByte, position, rest),
 
-    let body = elems
-        .next()
-        .ok_or(err("Missing function body", position.clone()))?;
-    let body = parse_expr(&body)?;
+                    "add1" => parse_prim1(ast::Op1::Add1, position, rest),
+                    "sub1" => parse_prim1(ast::Op1::Sub1, position, rest),
 
-    match elems.next() {
-        None => Ok(ast::FunctionDefinition { signature, body }),
+                    "zero?" => parse_prim1(ast::Op1::IsZero, position, rest),
+                    "char?" => parse_prim1(ast::Op1::IsChar, position, rest),
+                    "eof-object?" => parse_prim1(ast::Op1::IsEof, position, rest),
+                    "box?" => parse_prim1(ast::Op1::IsBox, position, rest),
+                    "cons?" => parse_prim1(ast::Op1::IsCons, position, rest),
+                    "vector?" => parse_prim1(ast::Op1::IsVector, position, rest),
+                    "string?" => parse_prim1(ast::Op1::IsString, position, rest),
 
-        Some(expr) => Err(err(
-            "Function definition should be of the form `(define <signature> <body>)`, but got more than 3 arguments.",
-            expr.position.clone(),
+                    "integer->char" => parse_prim1(ast::Op1::IntToChar, position, rest),
+                    "char->integer" => parse_prim1(ast::Op1::CharToInt, position, rest),
+
+                    "write-byte" => parse_prim1(ast::Op1::WriteByte, position, rest),
+
+                    "box" => parse_prim1(ast::Op1::Box, position, rest),
+                    "unbox" => parse_prim1(ast::Op1::Unbox, position, rest),
+                    "car" => parse_prim1(ast::Op1::Car, position, rest),
+                    "cdr" => parse_prim1(ast::Op1::Cdr, position, rest),
+
+                    "+" => parse_prim2(ast::Op2::Add, position, rest),
+                    "-" => parse_prim2(ast::Op2::Sub, position, rest),
+                    "<" => parse_prim2(ast::Op2::LessThan, position, rest),
+                    "=" => parse_prim2(ast::Op2::Equal, position, rest),
+
+                    "cons" => parse_prim2(ast::Op2::Cons, position, rest),
+                    "make-vector" => parse_prim2(ast::Op2::MakeVector, position, rest),
+                    "make-string" => parse_prim2(ast::Op2::MakeString, position, rest),
+                    "vector-ref" => parse_prim2(ast::Op2::VectorRef, position, rest),
+                    "string-ref" => parse_prim2(ast::Op2::StringRef, position, rest),
+
+                    "vector-set!" => parse_prim3(ast::Op3::VectorSet, position, rest),
+
+                    "begin" => parse_begin(rest, position),
+                    "if" => parse_if(rest, position),
+                    "let" => parse_let(rest, position),
+
+                    _ => parse_function_application(s.as_str(), rest, position),
+                },
+
+                _ => Err(err("The head of a list should be a symbol.", position)),
+            }
+        }
+    }
+}
+
+fn parse_prim0<'a>(operator: ast::Op0, _position: Position, args: &[Expr]) -> Result<ast::Expr> {
+    match args {
+        [] => Ok(ast::Expr::Prim0(operator)),
+
+        _ => {
+            let msg = format!("The operator '{:?}' takes 0 arguments.", operator);
+            Err(err(msg.as_str(), args[0].position.clone()))
+        }
+    }
+}
+
+fn parse_prim1<'a>(operator: ast::Op1, position: Position, args: &[Expr]) -> Result<ast::Expr> {
+    match args {
+        [arg] => Ok(ast::Expr::Prim1(operator, Box::new(parse_expr(arg)?))),
+
+        _ => {
+            let msg = format!("The operator '{:?}' takes 1 argument.", operator);
+            Err(err(msg.as_str(), position))
+        }
+    }
+}
+
+fn parse_prim2<'a>(operator: ast::Op2, position: Position, args: &[Expr]) -> Result<ast::Expr> {
+    match args {
+        [arg_1, arg_2] => Ok(ast::Expr::Prim2(
+            operator,
+            Box::new(parse_expr(arg_1)?),
+            Box::new(parse_expr(arg_2)?),
         )),
+
+        _ => {
+            let msg = format!("The operator '{:?}' takes 2 arguments.", operator);
+            Err(err(msg.as_str(), position))
+        }
     }
 }
 
-fn parse_define_keyword(expr: &Expr) -> Result<(), AstPasringError> {
+fn parse_prim3<'a>(operator: ast::Op3, position: Position, args: &[Expr]) -> Result<ast::Expr> {
+    match args {
+        [arg_1, arg_2, arg_3] => Ok(ast::Expr::Prim3(
+            operator,
+            Box::new(parse_expr(arg_1)?),
+            Box::new(parse_expr(arg_2)?),
+            Box::new(parse_expr(arg_3)?),
+        )),
+
+        _ => {
+            let msg = format!("The operator '{:?}' takes 3 arguments.", operator);
+            Err(err(msg.as_str(), position))
+        }
+    }
+}
+
+fn parse_begin<'a>(args: &[Expr], position: Position) -> Result<ast::Expr> {
+    match args {
+        [first, second] => Ok(ast::Expr::Begin(
+            Box::new(parse_expr(first)?),
+            Box::new(parse_expr(second)?),
+        )),
+
+        _ => {
+            let msg = format!("The 'begin' expression takes 2 arguments.");
+            Err(err(msg.as_str(), position))
+        }
+    }
+}
+
+fn parse_if<'a>(args: &[Expr], position: Position) -> Result<ast::Expr> {
+    match args {
+        [cond, then, els] => Ok(ast::Expr::If(ast::If {
+            cond: Box::new(parse_expr(cond)?),
+            then: Box::new(parse_expr(then)?),
+            els: Box::new(parse_expr(els)?),
+        })),
+
+        _ => {
+            let msg = format!("The 'if' expression takes 3 arguments.");
+            Err(err(msg.as_str(), position))
+        }
+    }
+}
+
+fn parse_let<'a>(args: &[Expr], position: Position) -> Result<ast::Expr> {
+    match args {
+        [bindings, body] => Ok(ast::Expr::Let(ast::Let {
+            binding: parse_variable_bindings(bindings)?,
+            body: Box::new(parse_expr(body)?),
+        })),
+        _ => {
+            let msg = format!("`let` expression should be of the form `(let <bindings> <body>)`");
+            Err(err(msg.as_str(), position))
+        }
+    }
+}
+
+/// # Arguments
+/// * `expr` - Should be a s-expression of the form `((<lhs> <rhs>))`.
+fn parse_variable_bindings(expr: &Expr) -> Result<ast::Binding> {
+    if let ExprKind::List(List(elems)) = &expr.kind {
+        if let [binding] = elems.as_slice() {
+            return parse_variable_binding(binding);
+        }
+    }
+    Err(err(
+        "Variable bindings should be of the form `((<lhs> <rhs>))`",
+        expr.position.clone(),
+    ))
+}
+
+/// # Arguments
+/// * `list` - Should be a s-expression of the form `(<lhs> <rhs>)`.
+fn parse_variable_binding(expr: &Expr) -> Result<ast::Binding> {
+    if let ExprKind::List(List(elems)) = &expr.kind {
+        if let [lhs, rhs] = elems.as_slice() {
+            return Ok(ast::Binding {
+                lhs: parse_identifier(lhs)?,
+                rhs: Box::new(parse_expr(rhs)?),
+            });
+        }
+    }
+    Err(err(
+        "Variable binding should be of the form `(<lhs> <rhs>)`",
+        expr.position.clone(),
+    ))
+}
+
+fn parse_function_application<'a>(
+    function_name: &str,
+    arguments: impl IntoIterator<Item = &'a Expr>,
+    _position: Position,
+) -> Result<ast::Expr> {
+    let function = ast::Identifier(function_name.to_owned());
+    let args = arguments
+        .into_iter()
+        .map(parse_expr)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ast::Expr::App(ast::App { function, args }))
+}
+
+/// Parse a function definition of the form: `(define (<name> <param> <param> ...) <body>)`
+fn parse_function_definition(expr: &Expr) -> Result<ast::FunctionDefinition> {
+    if let ExprKind::List(List(elems)) = &expr.kind {
+        if let [define, signature, body] = elems.as_slice() {
+            parse_define_keyword(define)?;
+            let signature = parse_function_signature(signature)?;
+            let body = parse_expr(&body)?;
+            return Ok(ast::FunctionDefinition { signature, body });
+        }
+    }
+    Err(err(
+        "Function definition should be of the form `(define <signature> <body>)`",
+        expr.position.clone(),
+    ))
+}
+
+fn parse_define_keyword(expr: &Expr) -> Result<()> {
     match &expr.kind {
         ExprKind::Atom(Atom::Symbol(s)) if s == "define" => Ok(()),
 
@@ -90,361 +267,32 @@ fn parse_define_keyword(expr: &Expr) -> Result<(), AstPasringError> {
     }
 }
 
-fn parse_function_signature(expr: &Expr) -> Result<FunctionSignature, AstPasringError> {
+fn parse_function_signature(expr: &Expr) -> Result<ast::FunctionSignature> {
+    if let ExprKind::List(List(elems)) = &expr.kind {
+        if let [name, params @ ..] = elems.as_slice() {
+            let name = parse_identifier(name)?;
+            let params = params
+                .iter()
+                .map(parse_identifier)
+                .collect::<Result<Vec<_>>>()?;
+
+            return Ok(ast::FunctionSignature { name, params });
+        }
+    }
+    Err(err(
+        "Function signature should be of the form `(<name> <param> <param> ...)`",
+        expr.position.clone(),
+    ))
+}
+
+fn parse_identifier(expr: &Expr) -> Result<ast::Identifier> {
     match &expr.kind {
-        ExprKind::List(list) => parse_function_signature_list(list, &expr.position),
+        ExprKind::Atom(Atom::Symbol(s)) => Ok(ast::Identifier::new(s)),
         _ => Err(AstPasringError {
-            msg: format!("Expected a function signature. Got {:?}", expr),
+            msg: format!("Expected an identifier. Got {:?}", expr),
             position: expr.position.clone(),
         }),
     }
-}
-
-fn parse_function_signature_list(
-    list: &List,
-    position: &Position,
-) -> Result<FunctionSignature, AstPasringError> {
-    let List(elems) = list;
-    let mut elems = elems.iter();
-
-    let name = elems
-        .next()
-        .ok_or(err("Missing function name", position.clone()))?;
-    let name = parse_function_name(name)?;
-
-    let params = elems
-        .map(|expr| match &expr.kind {
-            ExprKind::Atom(Atom::Symbol(s)) => Ok(Identifier::new(s)),
-            _ => Err(err("Expected a parameter name", expr.position.clone())),
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
-    Ok(FunctionSignature { name, params })
-}
-
-fn parse_function_name(expr: &Expr) -> Result<Identifier, AstPasringError> {
-    match &expr.kind {
-        ExprKind::Atom(Atom::Symbol(s)) => Ok(Identifier::new(s)),
-        _ => Err(AstPasringError {
-            msg: format!("Expected a function name. Got {:?}", expr),
-            position: expr.position.clone(),
-        }),
-    }
-}
-
-fn parse_literal(atom: &Atom, _position: Position) -> Result<ast::Expr, AstPasringError> {
-    match atom {
-        Atom::Integer(n) => Ok(ast::Expr::Lit(ast::Lit::Int(*n))),
-        Atom::Boolean(b) => Ok(ast::Expr::Lit(ast::Lit::Bool(*b))),
-        Atom::Character(c) => Ok(ast::Expr::Lit(ast::Lit::Char(*c))),
-        Atom::String(s) => Ok(ast::Expr::String(s.to_owned())),
-        Atom::Symbol(s) => match s.as_str() {
-            "eof" => Ok(ast::Expr::Eof),
-            _ => Ok(ast::Expr::Variable(Identifier::new(s))),
-        },
-    }
-}
-
-fn parse_list(list: &List, _position: Position) -> Result<ast::Expr, AstPasringError> {
-    let List(elems) = list;
-    let mut elems = elems.iter();
-    let head = match elems.next() {
-        Some(expr) => expr,
-        None => return Ok(ast::Expr::Lit(ast::Lit::EmptyList)),
-    };
-    let position = head.position.clone();
-
-    match &head.kind {
-        ExprKind::Atom(Atom::Symbol(s)) => match s.as_str() {
-            "read-byte" => parse_prim0(ast::Op0::ReadByte, position, &mut elems),
-            "peek-byte" => parse_prim0(ast::Op0::PeekByte, position, &mut elems),
-
-            "add1" => parse_prim1(ast::Op1::Add1, position, &mut elems),
-            "sub1" => parse_prim1(ast::Op1::Sub1, position, &mut elems),
-
-            "zero?" => parse_prim1(ast::Op1::IsZero, position, &mut elems),
-            "char?" => parse_prim1(ast::Op1::IsChar, position, &mut elems),
-            "eof-object?" => parse_prim1(ast::Op1::IsEof, position, &mut elems),
-            "box?" => parse_prim1(ast::Op1::IsBox, position, &mut elems),
-            "cons?" => parse_prim1(ast::Op1::IsCons, position, &mut elems),
-            "vector?" => parse_prim1(ast::Op1::IsVector, position, &mut elems),
-            "string?" => parse_prim1(ast::Op1::IsString, position, &mut elems),
-
-            "integer->char" => parse_prim1(ast::Op1::IntToChar, position, &mut elems),
-            "char->integer" => parse_prim1(ast::Op1::CharToInt, position, &mut elems),
-
-            "write-byte" => parse_prim1(ast::Op1::WriteByte, position, &mut elems),
-
-            "box" => parse_prim1(ast::Op1::Box, position, &mut elems),
-            "unbox" => parse_prim1(ast::Op1::Unbox, position, &mut elems),
-            "car" => parse_prim1(ast::Op1::Car, position, &mut elems),
-            "cdr" => parse_prim1(ast::Op1::Cdr, position, &mut elems),
-
-            "+" => parse_prim2(ast::Op2::Add, position, &mut elems),
-            "-" => parse_prim2(ast::Op2::Sub, position, &mut elems),
-            "<" => parse_prim2(ast::Op2::LessThan, position, &mut elems),
-            "=" => parse_prim2(ast::Op2::Equal, position, &mut elems),
-
-            "cons" => parse_prim2(ast::Op2::Cons, position, &mut elems),
-            "make-vector" => parse_prim2(ast::Op2::MakeVector, position, &mut elems),
-            "make-string" => parse_prim2(ast::Op2::MakeString, position, &mut elems),
-            "vector-ref" => parse_prim2(ast::Op2::VectorRef, position, &mut elems),
-            "string-ref" => parse_prim2(ast::Op2::StringRef, position, &mut elems),
-
-            "vector-set!" => parse_prim3(ast::Op3::VectorSet, position, &mut elems),
-
-            "begin" => parse_begin(&mut elems, position),
-            "if" => parse_if(&mut elems, position),
-            "let" => parse_let(&mut elems, position),
-
-            _ => parse_function_application(s, &mut elems, position),
-        },
-        _ => Err(AstPasringError {
-            msg: "Expected an operator".to_owned(),
-            position,
-        }),
-    }
-}
-
-fn parse_prim0<'a>(
-    operator: ast::Op0,
-    _position: Position,
-    rest: &mut impl Iterator<Item = &'a Expr>,
-) -> Result<ast::Expr, AstPasringError> {
-    match rest.next() {
-        None => Ok(ast::Expr::Prim0(operator)),
-        Some(expr) => Err(err(
-            "Expected 0 arguments. Got at least 1.",
-            expr.position.clone(),
-        )),
-    }
-}
-
-fn parse_prim1<'a>(
-    operator: ast::Op1,
-    position: Position,
-    rest: &mut impl Iterator<Item = &'a Expr>, // TODO: I'm not sure why this lifetime annotation is required.
-) -> Result<ast::Expr, AstPasringError> {
-    let operand = rest.next().ok_or(err("Missing operand", position))?;
-    let operand = parse_expr(&operand)?;
-    match rest.next() {
-        None => Ok(ast::Expr::Prim1(operator, Box::new(operand))),
-        Some(expr) => Err(err(
-            "Expected 1 argument. Got at least 2.",
-            expr.position.clone(),
-        )),
-    }
-}
-
-fn parse_prim2<'a>(
-    operator: ast::Op2,
-    position: Position,
-    rest: &mut impl Iterator<Item = &'a Expr>,
-) -> Result<ast::Expr, AstPasringError> {
-    let operand_1 = rest
-        .next()
-        .ok_or(err("Missing first operand", position.clone()))?;
-    let operand_1 = parse_expr(&operand_1)?;
-
-    let operand_2 = rest
-        .next()
-        .ok_or(err("Missing second operand", position.clone()))?;
-    let operand_2 = parse_expr(&operand_2)?;
-
-    match rest.next() {
-        None => Ok(ast::Expr::Prim2(
-            operator,
-            Box::new(operand_1),
-            Box::new(operand_2),
-        )),
-        Some(expr) => Err(err(
-            "Got more than 2 arguments for a binary operator.",
-            expr.position.clone(),
-        )),
-    }
-}
-
-fn parse_prim3<'a>(
-    operator: ast::Op3,
-    position: Position,
-    rest: &mut impl Iterator<Item = &'a Expr>,
-) -> Result<ast::Expr, AstPasringError> {
-    let operand_1 = rest
-        .next()
-        .ok_or(err("Missing first operand", position.clone()))?;
-    let operand_1 = parse_expr(&operand_1)?;
-
-    let operand_2 = rest
-        .next()
-        .ok_or(err("Missing second operand", position.clone()))?;
-    let operand_2 = parse_expr(&operand_2)?;
-
-    let operand_3 = rest
-        .next()
-        .ok_or(err("Missing third operand", position.clone()))?;
-    let operand_3 = parse_expr(&operand_3)?;
-
-    match rest.next() {
-        None => Ok(ast::Expr::Prim3(
-            operator,
-            Box::new(operand_1),
-            Box::new(operand_2),
-            Box::new(operand_3),
-        )),
-        Some(expr) => Err(err(
-            "Got more than 3 arguments for a ternary operator.",
-            expr.position.clone(),
-        )),
-    }
-}
-
-fn parse_begin<'a>(
-    rest: &mut impl Iterator<Item = &'a Expr>,
-    position: Position,
-) -> Result<ast::Expr, AstPasringError> {
-    let first = rest
-        .next()
-        .ok_or(err("Missing first argument", position.clone()))?;
-    let first = parse_expr(&first)?;
-
-    let second = rest
-        .next()
-        .ok_or(err("Missing second argument", position.clone()))?;
-    let second = parse_expr(&second)?;
-
-    match rest.next() {
-        None => Ok(ast::Expr::Begin(Box::new(first), Box::new(second))),
-        Some(expr) => Err(err(
-            "Expected 2 arguments. Got at least 3.",
-            expr.position.clone(),
-        )),
-    }
-}
-
-fn parse_if<'a>(
-    rest: &mut impl Iterator<Item = &'a Expr>,
-    position: Position,
-) -> Result<ast::Expr, AstPasringError> {
-    let cond = rest
-        .next()
-        .ok_or(err("Missing condition", position.clone()))?;
-    let cond = parse_expr(&cond)?;
-
-    let then = rest.next().ok_or(err("Missing 'then'", position.clone()))?;
-    let then = parse_expr(&then)?;
-
-    let els = rest.next().ok_or(err("Missing 'else'", position))?;
-    let els = parse_expr(&els)?;
-
-    match rest.next() {
-        None => Ok(ast::Expr::If(ast::If {
-            cond: Box::new(cond),
-            then: Box::new(then),
-            els: Box::new(els),
-        })),
-        Some(expr) => Err(err(
-            "Expected 3 arguments. Got at least 4.",
-            expr.position.clone(),
-        )),
-    }
-}
-
-fn parse_let<'a>(
-    rest: &mut impl Iterator<Item = &'a Expr>,
-    position: Position,
-) -> Result<ast::Expr, AstPasringError> {
-    let bindings = match rest.next() {
-        None => Err(err("Missing variable bindings", position.clone())),
-
-        Some(expr) => match &expr.kind {
-            ExprKind::List(list) => parse_variable_bindings(&list, expr.position.clone()),
-            _ => Err(err("Expected a list of bindings", expr.position.clone())),
-        },
-    }?;
-
-    let binding = if bindings.len() == 1 {
-        bindings.into_iter().next().unwrap()
-    } else {
-        return Err(err("Expected a single variable binding", position.clone()));
-    };
-
-    let body = rest
-        .next()
-        .ok_or(err("Missing body of `let` expression", position))?;
-
-    match rest.next() {
-        None => Ok(ast::Expr::Let(ast::Let {
-            binding,
-            body: Box::new(parse_expr(&body)?),
-        })),
-        Some(expr) => Err(err(
-            "`let` expression should be of the form `(let <bindings> <body>)`, but got more than 2 arguments.",
-            expr.position.clone(),
-        )),
-    }
-}
-
-/// # Arguments
-/// * `list` - A list of variable bindings
-fn parse_variable_bindings<'a>(
-    list: &List,
-    _position: Position,
-) -> Result<Vec<Binding>, AstPasringError> {
-    let List(elems) = list;
-    let elems = elems.iter();
-
-    elems
-        .map(|expr| match &expr.kind {
-            ExprKind::List(list) => parse_variable_binding(&list, expr.position.clone()),
-
-            _ => Err(err("Expected a variable binding", expr.position.clone())),
-        })
-        .collect()
-}
-
-/// # Arguments
-/// * `list` - A tuple of a variable name and a variable value
-fn parse_variable_binding<'a>(list: &List, position: Position) -> Result<Binding, AstPasringError> {
-    let List(elems) = list;
-    let mut elems = elems.iter();
-
-    let lhs = match elems.next() {
-        Some(Expr {
-            kind: ExprKind::Atom(Atom::Symbol(s)),
-            position: _,
-        }) => Identifier(s.to_owned()),
-
-        Some(expr) => return Err(err("Expected a variable name", expr.position.clone())),
-        None => return Err(err("Missing variable name", position.clone())),
-    };
-
-    let rhs = elems
-        .next()
-        .ok_or(err("Missing variable value", position.clone()))?;
-    let rhs = parse_expr(&rhs)?;
-
-    match elems.next() {
-        None => Ok(Binding {
-            lhs,
-            rhs: Box::new(rhs),
-        }),
-        Some(expr) => Err(err(
-            "Expected 2 arguments. Got at least 3.",
-            expr.position.clone(),
-        )),
-    }
-}
-
-fn parse_function_application<'a>(
-    function_name: &str,
-    arguments: &mut impl Iterator<Item = &'a Expr>,
-    _position: Position,
-) -> Result<ast::Expr, AstPasringError> {
-    let function = Identifier(function_name.to_owned());
-    let args = arguments
-        .map(|expr| parse_expr(expr))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(ast::Expr::App(ast::App { function, args }))
 }
 
 fn err(msg: &str, position: Position) -> AstPasringError {

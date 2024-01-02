@@ -30,45 +30,71 @@ pub enum Atom {
     String(String),
 }
 
+impl ExprKind {
+    pub fn int(i: i64) -> ExprKind {
+        ExprKind::Atom(Atom::Integer(i))
+    }
+
+    pub fn bool(b: bool) -> ExprKind {
+        ExprKind::Atom(Atom::Boolean(b))
+    }
+
+    pub fn symbol(s: &str) -> ExprKind {
+        ExprKind::Atom(Atom::Symbol(s.to_string()))
+    }
+
+    pub fn char(c: char) -> ExprKind {
+        ExprKind::Atom(Atom::Character(c))
+    }
+
+    pub fn string(s: &str) -> ExprKind {
+        ExprKind::Atom(Atom::String(s.to_string()))
+    }
+
+    pub fn list(elems: Vec<Expr>) -> ExprKind {
+        ExprKind::List(List(elems))
+    }
+}
+
 impl Expr {
     pub fn int(i: i64, position: Position) -> Expr {
         Expr {
-            kind: ExprKind::Atom(Atom::Integer(i)),
+            kind: ExprKind::int(i),
             position,
         }
     }
 
     pub fn bool(b: bool, position: Position) -> Expr {
         Expr {
-            kind: ExprKind::Atom(Atom::Boolean(b)),
+            kind: ExprKind::bool(b),
             position,
         }
     }
 
     pub fn symbol(s: &str, position: Position) -> Expr {
         Expr {
-            kind: ExprKind::Atom(Atom::Symbol(s.to_string())),
+            kind: ExprKind::symbol(s),
             position,
         }
     }
 
     pub fn char(c: char, position: Position) -> Expr {
         Expr {
-            kind: ExprKind::Atom(Atom::Character(c)),
+            kind: ExprKind::char(c),
             position,
         }
     }
-    
-    pub fn string(s: String, position: Position) -> Expr {
+
+    pub fn string(s: &str, position: Position) -> Expr {
         Expr {
-            kind: ExprKind::Atom(Atom::String(s)),
+            kind: ExprKind::string(s),
             position,
         }
     }
 
     pub fn list(elems: Vec<Expr>, position: Position) -> Expr {
         Expr {
-            kind: ExprKind::List(List(elems)),
+            kind: ExprKind::list(elems),
             position,
         }
     }
@@ -79,8 +105,8 @@ type Result<T> = std::result::Result<T, SexpParsingError>;
 pub fn parse(tokens: Vec<Token>) -> Result<Vec<Expr>> {
     let mut expressions = vec![];
     let mut tokens_iter = tokens.into_iter().peekable();
-    
-    while let Some(Token{token: _, position}) = tokens_iter.peek() {
+
+    while let Some(Token { token: _, position }) = tokens_iter.peek() {
         let position = position.clone();
         let expr = parse_expr(&mut tokens_iter, position)?;
         expressions.push(expr);
@@ -101,7 +127,7 @@ fn parse_expr(tokens: &mut Peekable<IntoIter<Token>>, position: Position) -> Res
             TokenKind::Symbol(s) => Ok(Expr::symbol(&s, position)),
             TokenKind::Boolean(b) => Ok(Expr::bool(b, position)),
             TokenKind::Character(c) => Ok(Expr::char(c, position)),
-            TokenKind::String(s) => Ok(Expr::string(s, position)),
+            TokenKind::String(s) => Ok(Expr::string(&s, position)),
         },
     }
 }
