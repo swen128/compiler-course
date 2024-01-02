@@ -1,7 +1,12 @@
+use std::io::Read;
+
 use compiler_course::compile;
 
+/// Reads source code from stdin and prints the compiled assembly to stdout.
 fn main() {
-    let mylang_source = "(add1 (sub1 (add1 42)))";
-    let program = compile(mylang_source).unwrap();
+    let mut source = String::new();
+    std::io::stdin().read_to_string(&mut source).unwrap();
+
+    let program = compile(&source).unwrap();
     println!("{}", program);
 }
