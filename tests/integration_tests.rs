@@ -431,6 +431,38 @@ fn several_function_definitions() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn recursive_function() {
+    let input = "
+        (define (tri x)
+            (if (zero? x)
+                0
+                (+ x (tri (sub1 x)))))
+        (tri 10)";
+
+    let result = run(input).unwrap();
+    let expected = "55";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn mutually_recursive_function() {
+    let input = "
+        (define (even? x)
+            (if (zero? x)
+                #t
+                (odd? (sub1 x))))
+        (define (odd? x)
+            (if (zero? x)
+                #f
+                (even? (sub1 x))))
+        (even? 101)";
+
+    let result = run(input).unwrap();
+    let expected = "#f";
+    assert_eq!(result, expected);
+}
+
 fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
     use std::process::{Command, Stdio};
@@ -441,6 +473,8 @@ fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     let asm_filename = format!("out/{}.asm", hash_str(&asm));
     let asm_output = format!("out/{}.o", hash_str(&asm));
     let bin = format!("out/{}.run", hash_str(&asm));
+
+    println!("{}", asm_filename);
 
     std::fs::write(&asm_filename, asm).expect("failed to write file");
 

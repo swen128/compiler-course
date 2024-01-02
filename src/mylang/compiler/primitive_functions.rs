@@ -10,6 +10,7 @@ use super::external_call::*;
 use super::state::Compiler;
 use super::string::*;
 use super::types::*;
+use super::variable::VariablesTable;
 use super::vector::*;
 
 pub fn compile_prim0(op: ast::Op0) -> Vec<Statement> {
@@ -19,8 +20,8 @@ pub fn compile_prim0(op: ast::Op0) -> Vec<Statement> {
     }
 }
 
-pub fn compile_prim1(op: ast::Op1, expr: ast::Expr, compiler: &mut Compiler) -> Vec<Statement> {
-    let mut statements = compile_expr(expr, compiler);
+pub fn compile_prim1(op: ast::Op1, expr: ast::Expr, compiler: &mut Compiler, env: &VariablesTable) -> Vec<Statement> {
+    let mut statements = compile_expr(expr, compiler, env);
     statements.extend(compile_op1(op));
     statements
 }
@@ -30,17 +31,16 @@ pub fn compile_prim2(
     first: ast::Expr,
     second: ast::Expr,
     compiler: &mut Compiler,
+    env: &VariablesTable,
 ) -> Vec<Statement> {
-    let mut statements = compile_expr(first, compiler);
+    let mut statements = compile_expr(first, compiler, env);
     statements.push(Statement::Push {
         src: Operand::Register(Register::RAX),
     });
-    compiler.variables_table.push_non_variable();
-    statements.extend(compile_expr(second, compiler));
+    statements.extend(compile_expr(second, compiler, &env.with_non_var()));
     statements.push(Statement::Pop {
         dest: Operand::Register(Register::R8),
     });
-    compiler.variables_table.pop();
     statements.extend(compile_op2(op, compiler));
     statements
 }
@@ -51,18 +51,23 @@ pub fn compile_prim3(
     second: ast::Expr,
     third: ast::Expr,
     compiler: &mut Compiler,
+    env: &VariablesTable,
 ) -> Vec<Statement> {
-    let mut statements = compile_expr(first, compiler);
+    let mut statements = compile_expr(first, compiler, env);
+
     statements.push(Statement::Push {
         src: Operand::Register(Register::RAX),
     });
-    compiler.variables_table.push_non_variable();
-    statements.extend(compile_expr(second, compiler));
+    let env = &env.with_non_var();
+
+    statements.extend(compile_expr(second, compiler, env));
+
     statements.push(Statement::Push {
         src: Operand::Register(Register::RAX),
     });
-    compiler.variables_table.push_non_variable();
-    statements.extend(compile_expr(third, compiler));
+    let env = &env.with_non_var();
+
+    statements.extend(compile_expr(third, compiler, env));
     statements.extend(compile_op3(op, compiler));
     statements
 }

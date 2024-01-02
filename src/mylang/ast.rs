@@ -26,7 +26,7 @@ pub struct Binding {
     pub rhs: Box<Expr>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Identifier(pub String);
 
 impl Identifier {

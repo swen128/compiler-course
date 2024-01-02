@@ -162,7 +162,7 @@ pub fn compile_vector_ref(_compiler: &mut Compiler) -> Vec<Statement> {
 /// * 3rd argument (new value): rax
 /// 
 /// This clobbers r8, r9, and r10.
-pub fn compile_vector_set(compiler: &mut Compiler) -> Vec<Statement> {
+pub fn compile_vector_set(_compiler: &mut Compiler) -> Vec<Statement> {
     // Move the arguments to the registers.
     // 1st argument (vector): r8
     // 2nd argument (index): r10
@@ -175,8 +175,6 @@ pub fn compile_vector_set(compiler: &mut Compiler) -> Vec<Statement> {
             dest: Operand::Register(Register::R8),
         },
     ];
-    compiler.variables_table.pop();
-    compiler.variables_table.pop();
     statements.extend(assert_vector(Register::R8));
     statements.extend(assert_natural_number(Register::R10));
 

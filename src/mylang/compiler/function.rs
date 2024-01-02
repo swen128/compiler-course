@@ -4,7 +4,7 @@
 // * The return address is right below all the arguments.
 // * The callee pops all the arguments before returning.
 
-use super::{expr::compile_expr, state::Compiler};
+use super::{expr::compile_expr, state::Compiler, variable::VariablesTable};
 use crate::{
     a86::ast::{Operand, Register, Statement},
     mylang::ast::{App, FunctionDefinition},
@@ -17,21 +17,18 @@ const RAX: Operand = Operand::Register(Register::RAX);
 pub fn compile_function_definition(
     function_definition: FunctionDefinition,
     compiler: &mut Compiler,
+    env: &VariablesTable,
 ) -> Vec<Statement> {
     let function_name = function_definition.signature.name.0;
     let body = function_definition.body;
     let params = function_definition.signature.params;
     let n_params = params.len();
 
-    for param in params {
-        compiler.variables_table.push_variable(param);
-    }
-
     let mut statements = vec![Statement::Label {
         name: function_name,
     }];
 
-    statements.extend(compile_expr(body, compiler));
+    statements.extend(compile_expr(body, compiler, &env.extended(params)));
 
     // Pop the arguments from the stack and discard them.
     statements.push(Statement::Add {
@@ -41,10 +38,6 @@ pub fn compile_function_definition(
 
     statements.push(Statement::Ret);
 
-    for _ in 0..n_params {
-        compiler.variables_table.pop();
-    }
-
     statements
 }
 
@@ -52,12 +45,12 @@ pub fn compile_function_definition(
 pub fn compile_function_application(
     function_application: App,
     compiler: &mut Compiler,
+    env: &VariablesTable,
 ) -> Vec<Statement> {
     let return_label = format!("function_return_site_{}", compiler.new_label_id());
 
     let function_name = function_application.function.0;
     let args = function_application.args;
-    let n_args = args.len();
 
     let mut statements = vec![
         Statement::Lea {
@@ -66,22 +59,18 @@ pub fn compile_function_application(
         },
         Statement::Push { src: RAX },
     ];
-    compiler.variables_table.push_non_variable();
 
+    let mut env = env.with_non_var();
     for arg in args {
-        statements.extend(compile_expr(arg, compiler));
+        statements.extend(compile_expr(arg, compiler, &env));
         statements.push(Statement::Push { src: RAX });
-        compiler.variables_table.push_non_variable();
+        env = env.with_non_var();
     }
 
     statements.push(Statement::Jmp {
         label: function_name,
     });
     statements.push(Statement::Label { name: return_label });
-
-    for _ in 0..n_args {
-        compiler.variables_table.pop();
-    }
 
     statements
 }

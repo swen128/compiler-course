@@ -3,19 +3,21 @@ use crate::{
     mylang::ast::{self, Identifier},
 };
 
-use super::{state::Compiler, expr::compile_expr};
+use super::{expr::compile_expr, state::Compiler};
 
 const RAX: Operand = Operand::Register(Register::RAX);
 const RSP: Operand = Operand::Register(Register::RSP);
 
-pub fn compile_let(expr: ast::Let, compiler: &mut Compiler) -> Vec<Statement> {
+pub fn compile_let(
+    expr: ast::Let,
+    compiler: &mut Compiler,
+    env: &VariablesTable,
+) -> Vec<Statement> {
     let ast::Let { binding, body } = expr;
 
-    let mut statements = compile_expr(*binding.rhs, compiler);
+    let mut statements = compile_expr(*binding.rhs, compiler, env);
     statements.push(Statement::Push { src: RAX });
-    compiler.variables_table.push_variable(binding.lhs);
-    statements.extend(compile_expr(*body, compiler));
-    compiler.variables_table.pop();
+    statements.extend(compile_expr(*body, compiler, &env.with_var(&binding.lhs)));
 
     // Pop the value from the stack and discard it.
     statements.push(Statement::Add {
@@ -25,9 +27,12 @@ pub fn compile_let(expr: ast::Let, compiler: &mut Compiler) -> Vec<Statement> {
     statements
 }
 
-pub fn compile_variable(variable: Identifier, compiler: &mut Compiler) -> Vec<Statement> {
-    let position = compiler
-        .variables_table
+pub fn compile_variable(
+    variable: Identifier,
+    _compiler: &mut Compiler,
+    env: &VariablesTable,
+) -> Vec<Statement> {
+    let position = env
         .position(&variable)
         .expect(format!("Undefined variable `{}`", variable.0).as_str()); // TODO: Return `Result` type.
     let offset = (position * 8) as i64;
@@ -35,4 +40,66 @@ pub fn compile_variable(variable: Identifier, compiler: &mut Compiler) -> Vec<St
         dest: RAX,
         src: Operand::Offset(Register::RSP, offset),
     }]
+}
+
+pub struct VariablesTable {
+    variables: Vec<Option<Identifier>>,
+}
+
+/// Keeps track of local variables, mapping them to lexical addresses.
+impl VariablesTable {
+    pub fn new() -> Self {
+        Self {
+            variables: Vec::new(),
+        }
+    }
+
+    pub fn extended(&self, new_variables: impl IntoIterator<Item = Identifier>) -> Self {
+        let mut variables = self.variables.clone();
+        variables.extend(new_variables.into_iter().map(Some));
+        Self::new_with_vars(&variables)
+    }
+
+    pub fn with_var(&self, variable: &Identifier) -> Self {
+        let mut variables = self.variables.clone();
+        variables.push(Some(variable.clone()));
+        Self::new_with_vars(&variables)
+    }
+
+    pub fn with_non_var(&self) -> Self {
+        let mut variables = self.variables.clone();
+        variables.push(None);
+        Self::new_with_vars(&variables)
+    }
+
+    pub fn position(&self, variable: &Identifier) -> Option<usize> {
+        self.variables
+            .iter()
+            .position(|option| option.as_ref().is_some_and(|v| v == variable))
+            .map(|i| self.variables.len() - i - 1)
+    }
+
+    fn new_with_vars(variables: &Vec<Option<Identifier>>) -> Self {
+        Self {
+            variables: variables.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn variable_position() {
+        let a = Identifier("a".to_string());
+        let b = Identifier("b".to_string());
+        let c = Identifier("c".to_string());
+
+        let env = VariablesTable::new().with_var(&a).with_var(&b).with_var(&c);
+
+        assert_eq!(env.position(&a), Some(2));
+        assert_eq!(env.position(&b), Some(1));
+        assert_eq!(env.position(&c), Some(0));
+    }
 }
