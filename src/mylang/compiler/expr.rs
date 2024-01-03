@@ -14,6 +14,7 @@ pub fn compile_expr(
     expr: ast::Expr,
     compiler: &mut Compiler,
     env: &VariablesTable,
+    is_tail_expr: bool,
 ) -> Vec<Statement> {
     match expr {
         ast::Expr::Eof => compile_value(Value::Eof),
@@ -27,14 +28,16 @@ pub fn compile_expr(
             compile_prim3(op, *first, *second, *third, compiler, env)
         }
 
-        ast::Expr::Begin(first, second) => compile_begin(*first, *second, compiler, env),
+        ast::Expr::Begin(first, second) => {
+            compile_begin(*first, *second, compiler, env, is_tail_expr)
+        }
 
-        ast::Expr::If(if_zero) => compile_if_expr(if_zero, compiler, env),
+        ast::Expr::If(if_zero) => compile_if_expr(if_zero, compiler, env, is_tail_expr),
 
         ast::Expr::Variable(variable) => compile_variable(variable, compiler, env),
-        ast::Expr::Let(let_expr) => compile_let(let_expr, compiler, env),
+        ast::Expr::Let(let_expr) => compile_let(let_expr, compiler, env, is_tail_expr),
 
-        ast::Expr::App(app) => compile_function_application(app, compiler, env),
+        ast::Expr::App(app) => compile_function_application(app, compiler, env, is_tail_expr),
     }
 }
 
@@ -50,9 +53,10 @@ fn compile_begin(
     second: ast::Expr,
     compiler: &mut Compiler,
     env: &VariablesTable,
+    is_tail_expr: bool,
 ) -> Vec<Statement> {
-    let mut statements = compile_expr(first, compiler, env);
-    statements.extend(compile_expr(second, compiler, env));
+    let mut statements = compile_expr(first, compiler, env, false);
+    statements.extend(compile_expr(second, compiler, env, is_tail_expr));
     statements
 }
 
@@ -60,12 +64,13 @@ fn compile_if_expr(
     if_expr: ast::If,
     compiler: &mut Compiler,
     env: &VariablesTable,
+    is_tail_expr: bool,
 ) -> Vec<Statement> {
     let label_id = compiler.new_label_id();
     let else_label = format!("else_{}", label_id);
     let end_label = format!("end_{}", label_id);
 
-    let mut statements = compile_expr(*if_expr.cond, compiler, env);
+    let mut statements = compile_expr(*if_expr.cond, compiler, env, false);
     statements.push(Statement::Cmp {
         dest: RAX,
         src: Operand::from(Value::Boolean(false)),
@@ -73,14 +78,14 @@ fn compile_if_expr(
     statements.push(Statement::Je {
         label: else_label.clone(),
     });
-    statements.extend(compile_expr(*if_expr.then, compiler, env));
+    statements.extend(compile_expr(*if_expr.then, compiler, env, is_tail_expr));
     statements.push(Statement::Jmp {
         label: end_label.clone(),
     });
     statements.push(Statement::Label {
         name: else_label.clone(),
     });
-    statements.extend(compile_expr(*if_expr.els, compiler, env));
+    statements.extend(compile_expr(*if_expr.els, compiler, env, is_tail_expr));
     statements.push(Statement::Label {
         name: end_label.clone(),
     });

@@ -12,12 +12,15 @@ pub fn compile_let(
     expr: ast::Let,
     compiler: &mut Compiler,
     env: &VariablesTable,
+    is_tail_expr: bool,
 ) -> Vec<Statement> {
     let ast::Let { binding, body } = expr;
 
-    let mut statements = compile_expr(*binding.rhs, compiler, env);
+    let mut statements = compile_expr(*binding.rhs, compiler, env, false);
     statements.push(Statement::Push { src: RAX });
-    statements.extend(compile_expr(*body, compiler, &env.with_var(&binding.lhs)));
+
+    let new_env = env.with_var(&binding.lhs);
+    statements.extend(compile_expr(*body, compiler, &new_env, is_tail_expr));
 
     // Pop the value from the stack and discard it.
     statements.push(Statement::Add {
@@ -42,6 +45,7 @@ pub fn compile_variable(
     }]
 }
 
+#[derive(Clone)]
 pub struct VariablesTable {
     variables: Vec<Option<Identifier>>,
 }
@@ -77,6 +81,10 @@ impl VariablesTable {
             .iter()
             .position(|option| option.as_ref().is_some_and(|v| v == variable))
             .map(|i| self.variables.len() - i - 1)
+    }
+    
+    pub fn len(&self) -> usize {
+        self.variables.len()
     }
 
     fn new_with_vars(variables: &Vec<Option<Identifier>>) -> Self {

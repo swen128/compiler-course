@@ -463,6 +463,20 @@ fn mutually_recursive_function() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn tail_call() {
+    let input = "
+        (define (f x)
+            (if (zero? x)
+                42
+                (f (sub1 x))))
+        (f 10000)";
+
+    let result = run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
 fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
     use std::process::{Command, Stdio};

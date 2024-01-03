@@ -21,7 +21,7 @@ pub fn compile_prim0(op: ast::Op0) -> Vec<Statement> {
 }
 
 pub fn compile_prim1(op: ast::Op1, expr: ast::Expr, compiler: &mut Compiler, env: &VariablesTable) -> Vec<Statement> {
-    let mut statements = compile_expr(expr, compiler, env);
+    let mut statements = compile_expr(expr, compiler, env, false);
     statements.extend(compile_op1(op));
     statements
 }
@@ -33,11 +33,11 @@ pub fn compile_prim2(
     compiler: &mut Compiler,
     env: &VariablesTable,
 ) -> Vec<Statement> {
-    let mut statements = compile_expr(first, compiler, env);
+    let mut statements = compile_expr(first, compiler, env, false);
     statements.push(Statement::Push {
         src: Operand::Register(Register::RAX),
     });
-    statements.extend(compile_expr(second, compiler, &env.with_non_var()));
+    statements.extend(compile_expr(second, compiler, &env.with_non_var(), false));
     statements.push(Statement::Pop {
         dest: Operand::Register(Register::R8),
     });
@@ -53,21 +53,21 @@ pub fn compile_prim3(
     compiler: &mut Compiler,
     env: &VariablesTable,
 ) -> Vec<Statement> {
-    let mut statements = compile_expr(first, compiler, env);
+    let mut statements = compile_expr(first, compiler, env, false);
 
     statements.push(Statement::Push {
         src: Operand::Register(Register::RAX),
     });
     let env = &env.with_non_var();
 
-    statements.extend(compile_expr(second, compiler, env));
+    statements.extend(compile_expr(second, compiler, env, false));
 
     statements.push(Statement::Push {
         src: Operand::Register(Register::RAX),
     });
     let env = &env.with_non_var();
 
-    statements.extend(compile_expr(third, compiler, env));
+    statements.extend(compile_expr(third, compiler, env, false));
     statements.extend(compile_op3(op, compiler));
     statements
 }

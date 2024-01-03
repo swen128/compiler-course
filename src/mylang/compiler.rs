@@ -39,7 +39,7 @@ pub fn compile(program: ast::Program) -> Program {
         dest: RBX,
         src: RDI, // The runtime must allocate the heap memory and pass its address via rdi.
     });
-    statements.extend(compile_expr(program.expr, &mut compiler, &env));
+    statements.extend(compile_expr(program.expr, &mut compiler, &env, true));
     statements.push(Statement::Ret);
     statements.extend(compile_error_handler());
 
