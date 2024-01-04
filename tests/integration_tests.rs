@@ -477,6 +477,87 @@ fn tail_call() {
     assert_eq!(result, expected);
 }
 
+#[test]
+fn pattern_match_wildcard() {
+    let input = "(match 42 [_ #t])";
+
+    let result = run(input).unwrap();
+    let expected = "#t";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn pattern_match_variable() {
+    let input = "(match 42 [x x])";
+
+    let result = run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn pattern_match_literal() {
+    let input = "(match 42 [42 #t])";
+
+    let result = run(input).unwrap();
+    let expected = "#t";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn pattern_match_box() {
+    let input = "(match (box 42) [(box x) x])";
+
+    let result = run(input).unwrap();
+    let expected = "42";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn pattern_match_cons() {
+    let input = "
+        (match (cons 42 8)
+            [(cons x y) (+ x y)])";
+
+    let result = run(input).unwrap();
+    let expected = "50";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn pattern_match_nested_cons() {
+    let input = "
+        (match (cons (cons 42 8) 7)
+            [(cons (cons x y) 7) (+ x y)])";
+
+    let result = run(input).unwrap();
+    let expected = "50";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn pattern_match_with_let() {
+    let input = "
+        (let ((x -30))
+            (match (cons 42 8)
+                [(cons y z) (+ x y)]))";
+
+    let result = run(input).unwrap();
+    let expected = "12";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn pattern_match_and() {
+    let input = "
+        (match (cons 1 2)
+            [(and (cons 1 x) (cons y 2)) (+ x y)])";
+    
+    let result = run(input).unwrap();
+    let expected = "3";
+    assert_eq!(result, expected);
+}
+
 fn run_with_stdin(source: &str, input: &str) -> Result<String, Error> {
     use std::io::Write;
     use std::process::{Command, Stdio};

@@ -154,5 +154,6 @@ fn print_register(register: &Register) -> String {
         Register::R13 => "r13".to_string(),
         Register::R14 => "r14".to_string(),
         Register::R15 => "r15".to_string(),
+        Register::R9D => "r9d".to_string(),
     }
 }

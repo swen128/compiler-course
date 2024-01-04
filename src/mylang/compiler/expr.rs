@@ -3,6 +3,7 @@ use crate::mylang::ast;
 use crate::mylang::data_type::Value;
 
 use super::function::compile_function_application;
+use super::pattern_match::compile_match;
 use super::primitive_functions::{compile_prim0, compile_prim1, compile_prim2, compile_prim3};
 use super::state::Compiler;
 use super::string::compile_string_literal;
@@ -10,6 +11,13 @@ use super::variable::{compile_let, compile_variable, VariablesTable};
 
 const RAX: Operand = Operand::Register(Register::RAX);
 
+/// Returns instructions to set rax to the evaluated value of the given expression.
+///
+/// # Arguments
+/// * `expr` - The expression to compile.
+/// * `compiler` - The global compiler state.
+/// * `env` - The variables in current scope.
+/// * `is_tail_expr` - Whether the expression is in tail position.
 pub fn compile_expr(
     expr: ast::Expr,
     compiler: &mut Compiler,
@@ -18,8 +26,7 @@ pub fn compile_expr(
 ) -> Vec<Statement> {
     match expr {
         ast::Expr::Eof => compile_value(Value::Eof),
-        ast::Expr::Lit(lit) => compile_value(Value::from(lit)),
-        ast::Expr::String(string) => compile_string_literal(&string),
+        ast::Expr::Lit(lit) => compile_literal(lit),
 
         ast::Expr::Prim0(op) => compile_prim0(op),
         ast::Expr::Prim1(op, expr) => compile_prim1(op, *expr, compiler, env),
@@ -33,11 +40,23 @@ pub fn compile_expr(
         }
 
         ast::Expr::If(if_zero) => compile_if_expr(if_zero, compiler, env, is_tail_expr),
+        
+        ast::Expr::Match(match_expr) => compile_match(match_expr, compiler, env, is_tail_expr),
 
         ast::Expr::Variable(variable) => compile_variable(variable, compiler, env),
         ast::Expr::Let(let_expr) => compile_let(let_expr, compiler, env, is_tail_expr),
 
         ast::Expr::App(app) => compile_function_application(app, compiler, env, is_tail_expr),
+    }
+}
+
+fn compile_literal(lit: ast::Lit) -> Vec<Statement> {
+    match lit {
+        ast::Lit::Int(i) => compile_value(Value::Int(i)),
+        ast::Lit::Bool(b) => compile_value(Value::Boolean(b)),
+        ast::Lit::Char(c) => compile_value(Value::Char(c)),
+        ast::Lit::String(s) => compile_string_literal(&s),
+        ast::Lit::EmptyList => compile_value(Value::EmptyList),
     }
 }
 

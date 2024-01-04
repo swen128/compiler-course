@@ -56,6 +56,7 @@ pub enum Register {
     R13,
     R14,
     R15,
+    R9D,
 }
 
 pub struct Program {

@@ -10,6 +10,7 @@ const RBX: Operand = Operand::Register(Register::RBX);
 const EAX: Operand = Operand::Register(Register::EAX);
 const R8: Operand = Operand::Register(Register::R8);
 const R9: Operand = Operand::Register(Register::R9);
+const R9D: Operand = Operand::Register(Register::R9D);
 
 /// Returns instructions to initialize a string of the given length with the repeated values,
 /// assuming the length and the value is already given in r8 and rax respectively.
@@ -236,6 +237,62 @@ pub fn compile_string_ref(_compiler: &mut Compiler) -> Vec<Statement> {
         dest: RAX,
         src: Operand::Immediate(CHAR_TYPE.tag.0 as i64),
     });
+
+    statements
+}
+
+/// Returns instructions which sets the comparison flag to true iff
+/// value in rax equals to the given static string.
+pub fn compare_strings(string: &str, compiler: &mut Compiler) -> Vec<Statement> {
+    let neq_label = format!("string_neq_{}", compiler.new_label_id());
+    let jne = Statement::Jne {
+        label: neq_label.clone(),
+    };
+
+    let mut statements = vec![
+        // Check if the type of rax is string.
+        Statement::Mov { dest: R9, src: RAX },
+        Statement::And {
+            dest: R9,
+            src: Operand::Immediate(STRING_TYPE.mask() as i64),
+        },
+        Statement::Cmp {
+            dest: R9,
+            src: Operand::Immediate(STRING_TYPE.tag.0 as i64),
+        },
+        jne.clone(),
+        // Set r8 to the raw pointer address of the string.
+        Statement::Mov { dest: R8, src: RAX },
+        Statement::Xor {
+            dest: R8,
+            src: Operand::Immediate(STRING_TYPE.tag.0 as i64),
+        },
+        // Set r9 to the length of the string.
+        Statement::Mov {
+            dest: R9,
+            src: Operand::Offset(Register::R8, 0),
+        },
+        // Compare the length.
+        Statement::Cmp {
+            dest: R9,
+            src: Operand::Immediate(string.len() as i64),
+        },
+    ];
+
+    // Compare each character.
+    for (i, c) in string.chars().enumerate() {
+        statements.push(Statement::Mov {
+            dest: R9D,
+            src: Operand::Immediate(c as i64), // Each element is guaranteed to be a character, so the type tag is not needed.
+        });
+        statements.push(Statement::Cmp {
+            dest: Operand::Offset(Register::R8, 8 + 4 * i as i64), // 8 bytes for the length, 4 bytes per character
+            src: R9D,
+        });
+        statements.push(jne.clone());
+    }
+
+    statements.push(Statement::Label { name: neq_label });
 
     statements
 }

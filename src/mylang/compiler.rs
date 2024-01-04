@@ -21,6 +21,7 @@ mod string;
 mod types;
 mod variable;
 mod vector;
+mod pattern_match;
 
 const RBX: Operand = Operand::Register(Register::RBX);
 const RDI: Operand = Operand::Register(Register::RDI);

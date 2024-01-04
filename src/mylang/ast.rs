@@ -2,7 +2,6 @@
 pub enum Expr {
     Eof,
     Lit(Lit),
-    String(String),
     Prim0(Op0),
     Prim1(Op1, Box<Expr>),
     Prim2(Op2, Box<Expr>, Box<Expr>),
@@ -12,6 +11,7 @@ pub enum Expr {
     Let(Let),
     App(App),
     If(If),
+    Match(Match),
 }
 
 #[derive(Debug)]
@@ -50,10 +50,33 @@ pub struct If {
 }
 
 #[derive(Debug)]
+pub struct Match {
+    pub expr: Box<Expr>,
+    pub arms: Vec<Arm>,
+}
+
+#[derive(Debug)]
+pub struct Arm {
+    pub pattern: Pattern,
+    pub body: Box<Expr>,
+}
+
+#[derive(Debug)]
+pub enum Pattern {
+    Wildcard,
+    Variable(Identifier),
+    Lit(Lit),
+    Cons(Box<Pattern>, Box<Pattern>),
+    Box(Box<Pattern>),
+    And(Box<Pattern>, Box<Pattern>),
+}
+
+#[derive(Debug)]
 pub enum Lit {
     Int(i64),
     Bool(bool),
     Char(char),
+    String(String),
     EmptyList,
 }
 

@@ -1,6 +1,3 @@
-use super::ast::Lit;
-
-#[allow(dead_code)]
 pub enum Value {
     Int(i64),
     Byte(u8),
@@ -38,17 +35,6 @@ impl Value {
             Value::EmptyList => EMPTY_TYPE.0 as i64,
             Value::EmptyVector => VECTOR_TYPE.tag.0 as i64,
             Value::EmptyString => STRING_TYPE.tag.0 as i64,
-        }
-    }
-}
-
-impl From<Lit> for Value {
-    fn from(value: Lit) -> Self {
-        match value {
-            Lit::Int(i) => Value::Int(i),
-            Lit::Char(c) => Value::Char(c),
-            Lit::Bool(b) => Value::Boolean(b),
-            Lit::EmptyList => Value::EmptyList,
         }
     }
 }

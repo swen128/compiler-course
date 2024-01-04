@@ -34,7 +34,7 @@ fn parse_literal(atom: &Atom) -> Result<ast::Expr> {
         Atom::Integer(n) => Ok(ast::Expr::Lit(ast::Lit::Int(*n))),
         Atom::Boolean(b) => Ok(ast::Expr::Lit(ast::Lit::Bool(*b))),
         Atom::Character(c) => Ok(ast::Expr::Lit(ast::Lit::Char(*c))),
-        Atom::String(s) => Ok(ast::Expr::String(s.to_owned())),
+        Atom::String(s) => Ok(ast::Expr::Lit(ast::Lit::String(s.to_owned()))),
         Atom::Symbol(s) => match s.as_str() {
             "eof" => Ok(ast::Expr::Eof),
             _ => Ok(ast::Expr::Variable(ast::Identifier::new(s))),
@@ -91,6 +91,7 @@ fn parse_list(List(elems): &List) -> Result<ast::Expr> {
                     "begin" => parse_begin(rest, position),
                     "if" => parse_if(rest, position),
                     "let" => parse_let(rest, position),
+                    "match" => parse_match(rest, position),
 
                     _ => parse_function_application(s.as_str(), rest, position),
                 },
@@ -225,6 +226,88 @@ fn parse_variable_binding(expr: &Expr) -> Result<ast::Binding> {
         "Variable binding should be of the form `(<lhs> <rhs>)`",
         expr.position.clone(),
     ))
+}
+
+fn parse_match(args: &[Expr], position: Position) -> Result<ast::Expr> {
+    match args {
+        [expr, arms @ ..] => Ok(ast::Expr::Match(ast::Match {
+            expr: Box::new(parse_expr(expr)?),
+            arms: arms
+                .iter()
+                .map(parse_match_arm)
+                .collect::<Result<Vec<_>>>()?,
+        })),
+
+        _ => {
+            let msg =
+                format!("The 'match' expression should be of the form `(match <expr> <arms>...)`");
+            Err(err(msg.as_str(), position))
+        }
+    }
+}
+
+fn parse_match_arm(expr: &Expr) -> Result<ast::Arm> {
+    if let ExprKind::List(List(elems)) = &expr.kind {
+        if let [pattern, body] = elems.as_slice() {
+            return Ok(ast::Arm {
+                pattern: parse_pattern(pattern)?,
+                body: Box::new(parse_expr(body)?),
+            });
+        }
+    }
+    Err(err(
+        "Match arm should be of the form `(<pattern> <body>)`",
+        expr.position.clone(),
+    ))
+}
+
+fn parse_pattern(expr: &Expr) -> Result<ast::Pattern> {
+    match &expr.kind {
+        ExprKind::Atom(atom) => Ok(parse_atom_pattern(atom)),
+        ExprKind::List(List(elems)) => parse_complex_pattern(elems),
+    }
+}
+
+fn parse_atom_pattern(atom: &Atom) -> ast::Pattern {
+    match atom {
+        Atom::Integer(n) => ast::Pattern::Lit(ast::Lit::Int(*n)),
+        Atom::Boolean(b) => ast::Pattern::Lit(ast::Lit::Bool(*b)),
+        Atom::Character(c) => ast::Pattern::Lit(ast::Lit::Char(*c)),
+        Atom::String(s) => ast::Pattern::Lit(ast::Lit::String(s.to_owned())),
+        Atom::Symbol(s) => {
+            if s == "_" {
+                ast::Pattern::Wildcard
+            } else {
+                ast::Pattern::Variable(ast::Identifier::new(s))
+            }
+        }
+    }
+}
+
+fn parse_complex_pattern(elems: &[Expr]) -> Result<ast::Pattern> {
+    match elems {
+        [] => Ok(ast::Pattern::Lit(ast::Lit::EmptyList)),
+
+        [head, tail @ ..] => {
+            if let ExprKind::Atom(Atom::Symbol(s)) = &head.kind {
+                match (s.as_str(), tail) {
+                    ("cons", [car, cdr]) => Ok(ast::Pattern::Cons(
+                        Box::new(parse_pattern(car)?),
+                        Box::new(parse_pattern(cdr)?),
+                    )),
+                    ("box", [expr]) => Ok(ast::Pattern::Box(Box::new(parse_pattern(expr)?))),
+                    ("and", [left, right]) => Ok(ast::Pattern::And(
+                        Box::new(parse_pattern(left)?),
+                        Box::new(parse_pattern(right)?),
+                    )),
+
+                    _ => Err(err("Invalid pattern syntax.", head.position.clone())),
+                }
+            } else {
+                Err(err("Invalid pattern syntax.", head.position.clone()))
+            }
+        }
+    }
 }
 
 fn parse_function_application<'a>(
