@@ -111,6 +111,10 @@ pub fn assert_string(register: Register) -> Vec<Statement> {
     assert_type(register, &STRING_TYPE)
 }
 
+pub fn assert_closure(register: Register) -> Vec<Statement> {
+    assert_type(register, &CLOSURE_TYPE)
+}
+
 pub fn assert_natural_number(register: Register) -> Vec<Statement> {
     let mut statements = assert_int(register.clone());
     statements.push(Statement::Cmp {

@@ -13,6 +13,7 @@ pub enum Statement {
     Cmove { dest: Operand, src: Operand },
     Cmovl { dest: Operand, src: Operand },
     Jmp { label: String },
+    JmpRegister(Register),
     Je { label: String },
     Jne { label: String },
     Jg { label: String },

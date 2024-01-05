@@ -45,7 +45,7 @@ pub fn compile_variable(
     }]
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VariablesTable {
     variables: Vec<Option<Identifier>>,
 }

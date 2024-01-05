@@ -42,6 +42,7 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Jg { label } => format!("\tjg {}", print_label(label, context)),
         Statement::Jl { label } => format!("\tjl {}", print_label(label, context)),
         Statement::Jmp { label } => format!("\tjmp {}", print_label(label, context)),
+        Statement::JmpRegister(register) => format!("\tjmp {}", print_register(register)),
         Statement::Push { src } => format!("\tpush {}", print_operand(src)),
         Statement::Pop { dest } => format!("\tpop {}", print_operand(dest)),
         Statement::Add { dest, src } => print_add(dest, src),

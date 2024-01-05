@@ -2,7 +2,7 @@ use crate::a86::ast::*;
 use crate::mylang::ast;
 use crate::mylang::data_type::Value;
 
-use super::function::compile_function_application;
+use super::function::{compile_function_application, compile_closure};
 use super::pattern_match::compile_match;
 use super::primitive_functions::{compile_prim0, compile_prim1, compile_prim2, compile_prim3};
 use super::state::Compiler;
@@ -47,6 +47,7 @@ pub fn compile_expr(
         ast::Expr::Let(let_expr) => compile_let(let_expr, compiler, env, is_tail_expr),
 
         ast::Expr::App(app) => compile_function_application(app, compiler, env, is_tail_expr),
+        ast::Expr::Lambda(lambda) => compile_closure(lambda, env),
     }
 }
 

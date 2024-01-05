@@ -93,10 +93,12 @@ fn parse_list(List(elems): &List) -> Result<ast::Expr> {
                     "let" => parse_let(rest, position),
                     "match" => parse_match(rest, position),
 
-                    _ => parse_function_application(s.as_str(), rest, position),
+                    "lambda" => parse_lambda(rest, position),
+
+                    _ => parse_function_application(head, rest),
                 },
 
-                _ => Err(err("The head of a list should be a symbol.", position)),
+                _ => parse_function_application(head, rest),
             }
         }
     }
@@ -311,16 +313,16 @@ fn parse_complex_pattern(elems: &[Expr]) -> Result<ast::Pattern> {
 }
 
 fn parse_function_application<'a>(
-    function_name: &str,
+    function: &'a Expr,
     arguments: impl IntoIterator<Item = &'a Expr>,
-    _position: Position,
 ) -> Result<ast::Expr> {
-    let function = ast::Identifier(function_name.to_owned());
-    let args = arguments
-        .into_iter()
-        .map(parse_expr)
-        .collect::<Result<Vec<_>>>()?;
-    Ok(ast::Expr::App(ast::App { function, args }))
+    Ok(ast::Expr::App(ast::App {
+        function: Box::new(parse_expr(function)?),
+        args: arguments
+            .into_iter()
+            .map(parse_expr)
+            .collect::<Result<Vec<_>>>()?,
+    }))
 }
 
 /// Parse a function definition of the form: `(define (<name> <param> <param> ...) <body>)`
@@ -376,6 +378,35 @@ fn parse_identifier(expr: &Expr) -> Result<ast::Identifier> {
             position: expr.position.clone(),
         }),
     }
+}
+
+fn parse_lambda(args: &[Expr], position: Position) -> Result<ast::Expr> {
+    match args {
+        [params, body] => Ok(ast::Expr::Lambda(ast::Lambda {
+            // Unique identifier
+            id: ast::Identifier::new(format!("__lambda_{}", position.offset).as_str()),
+            params: parse_lambda_params(params)?,
+            body: Box::new(parse_expr(body)?),
+        })),
+        _ => {
+            let msg =
+                format!("Lambda expression should be of the form `(lambda <params> <body>)`");
+            Err(err(msg.as_str(), position))
+        }
+    }
+}
+
+fn parse_lambda_params(expr: &Expr) -> Result<Vec<ast::Identifier>> {
+    if let ExprKind::List(List(elems)) = &expr.kind {
+        return elems
+            .iter()
+            .map(parse_identifier)
+            .collect::<Result<Vec<_>>>();
+    }
+    Err(err(
+        "Expected a list of lambda parameters.",
+        expr.position.clone(),
+    ))
 }
 
 fn err(msg: &str, position: Position) -> AstPasringError {

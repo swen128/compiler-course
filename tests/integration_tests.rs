@@ -34,7 +34,7 @@ fn minus_operator() {
 
 #[test]
 fn invalid_syntax() {
-    let input = "((add1 (sub1 (add1 42))))";
+    let input = "(add1 42 43)";
     let result = run(input);
 
     match result {
@@ -555,6 +555,35 @@ fn pattern_match_and() {
     
     let result = run(input).unwrap();
     let expected = "3";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn lambda_function() {
+    let input = "((lambda (x y) (+ x y)) 42 1)";
+
+    let result = run(input).unwrap();
+    let expected = "43";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn lambda_with_free_variable() {
+    let input = "
+        (let ((x 42))
+            ((lambda (y) (+ x y)) 1))";
+
+    let result = run(input).unwrap();
+    let expected = "43";
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn lambda_tail_call() {
+    let input = "((lambda (x) x) 42)";
+
+    let result = run(input).unwrap();
+    let expected = "42";
     assert_eq!(result, expected);
 }
 

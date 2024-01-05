@@ -23,6 +23,7 @@ impl Value {
             Value::Byte(b) => INT_TYPE.encode(b as i64),
             Value::Char(c) => CHAR_TYPE.encode(c as i64),
 
+            // TODO: Memory address is only availabe at runtime, so we never use these.
             Value::Box(Address(a)) => BOX_TYPE.encode(a),
             Value::Cons(Address(a)) => CONS_TYPE.encode(a),
             Value::Vector(Address(a)) => VECTOR_TYPE.encode(a),
@@ -63,10 +64,11 @@ impl UnaryType {
 // - Pointers
 //
 // Pointers are either:
-// - Boxes:  end in #b001
-// - Cons:   end in #b010
-// - Vector: end in #b011
-// - String: end in #b100
+// - Boxes:   end in #b001
+// - Cons:    end in #b010
+// - Vector:  end in #b011
+// - String:  end in #b100
+// - Closure: end in #b101
 //
 // Immediates are either
 // - Integers:   end in  #b0 000
@@ -96,6 +98,11 @@ pub const VECTOR_TYPE: UnaryType = UnaryType {
 pub const STRING_TYPE: UnaryType = UnaryType {
     shift: IMMEDIATE_SHIFT,
     tag: TypeTag(0b100),
+};
+
+pub const CLOSURE_TYPE: UnaryType = UnaryType {
+    shift: IMMEDIATE_SHIFT,
+    tag: TypeTag(0b101),
 };
 
 pub const INT_TYPE: UnaryType = UnaryType {
