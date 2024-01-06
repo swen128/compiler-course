@@ -28,6 +28,10 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Global { name } => format!("\tglobal {}", name),
         Statement::Extern { name } => format!("\textern {}", name),
         Statement::Label { name } => format!("{}:", print_label(name, context)),
+        Statement::Data => "\tsection .data".to_string(),
+        Statement::Text => "\tsection .text".to_string(),
+        Statement::Dq { value } => format!("\tdq {}", value),
+        Statement::Dd { value } => format!("\tdd {}", value),
         Statement::Mov { dest, src } => print_mov(dest, src),
         Statement::And { dest, src } => print_and(dest, src),
         Statement::Or { dest, src } => print_or(dest, src),
@@ -48,6 +52,9 @@ fn print_statement(statement: &Statement, context: &CompilationContext) -> Strin
         Statement::Add { dest, src } => print_add(dest, src),
         Statement::Sub { dest, src } => print_sub(dest, src),
         Statement::Lea { dest, label } => print_lea(dest, label, context),
+        Statement::LeaArithmetic { dest, expr } => {
+            format!("\tlea {}, {}", print_operand(dest), expr)
+        }
         Statement::Call { label } => print_call(label, context),
         Statement::Ret => "\tret".to_string(),
     }

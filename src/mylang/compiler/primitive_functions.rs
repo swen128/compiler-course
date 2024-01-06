@@ -7,11 +7,15 @@ use super::box_type::*;
 use super::cons::*;
 use super::expr::compile_expr;
 use super::external_call::*;
+use super::helper::if_equal;
 use super::state::Compiler;
 use super::string::*;
 use super::types::*;
 use super::variable::VariablesTable;
 use super::vector::*;
+
+const RAX: Operand = Operand::Register(Register::RAX);
+const R8: Operand = Operand::Register(Register::R8);
 
 pub fn compile_prim0(op: ast::Op0) -> Vec<Statement> {
     match op {
@@ -20,7 +24,12 @@ pub fn compile_prim0(op: ast::Op0) -> Vec<Statement> {
     }
 }
 
-pub fn compile_prim1(op: ast::Op1, expr: ast::Expr, compiler: &mut Compiler, env: &VariablesTable) -> Vec<Statement> {
+pub fn compile_prim1(
+    op: ast::Op1,
+    expr: ast::Expr,
+    compiler: &mut Compiler,
+    env: &VariablesTable,
+) -> Vec<Statement> {
     let mut statements = compile_expr(expr, compiler, env, false);
     statements.extend(compile_op1(op));
     statements
@@ -107,8 +116,10 @@ fn compile_op2(op: ast::Op2, compiler: &mut Compiler) -> Vec<Statement> {
     match op {
         ast::Op2::Add => compile_add(),
         ast::Op2::Sub => compile_sub(),
-        ast::Op2::Equal => compile_int_equal(),
+        ast::Op2::IntEq => compile_int_equal(),
         ast::Op2::LessThan => compile_less_than(),
+        
+        ast::Op2::Eq => compile_eq(),
 
         ast::Op2::Cons => compile_cons(),
 
@@ -129,4 +140,11 @@ fn compile_op3(op: ast::Op3, compiler: &mut Compiler) -> Vec<Statement> {
     match op {
         ast::Op3::VectorSet => compile_vector_set(compiler),
     }
+}
+
+fn compile_eq() -> Vec<Statement> {
+    let mut statements = vec![];
+    statements.push(Statement::Cmp { dest: RAX, src: R8 });
+    statements.extend(if_equal());
+    statements
 }

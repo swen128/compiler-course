@@ -78,7 +78,9 @@ fn parse_list(List(elems): &List) -> Result<ast::Expr> {
                     "+" => parse_prim2(ast::Op2::Add, position, rest),
                     "-" => parse_prim2(ast::Op2::Sub, position, rest),
                     "<" => parse_prim2(ast::Op2::LessThan, position, rest),
-                    "=" => parse_prim2(ast::Op2::Equal, position, rest),
+                    "=" => parse_prim2(ast::Op2::IntEq, position, rest),
+                    
+                    "eq?" => parse_prim2(ast::Op2::Eq, position, rest),
 
                     "cons" => parse_prim2(ast::Op2::Cons, position, rest),
                     "make-vector" => parse_prim2(ast::Op2::MakeVector, position, rest),

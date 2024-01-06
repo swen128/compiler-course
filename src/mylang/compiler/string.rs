@@ -1,9 +1,18 @@
+use std::collections::HashSet;
+
 use crate::{
     a86::ast::{Operand, Register, Statement},
-    mylang::data_type::*,
+    mylang::{
+        ast::{App, Expr, If, Lambda, Let, Lit, Match, Program},
+        data_type::*,
+    },
 };
 
-use super::{error::ERR_LABEL, state::Compiler, types::*};
+use super::{
+    error::ERR_LABEL,
+    state::{Compiler, Label},
+    types::*,
+};
 
 const RAX: Operand = Operand::Register(Register::RAX);
 const RBX: Operand = Operand::Register(Register::RBX);
@@ -118,62 +127,6 @@ pub fn compile_make_string(compiler: &mut Compiler) -> Vec<Statement> {
         name: end_label.clone(),
     });
     statements
-}
-
-pub fn compile_string_literal(string: &str) -> Vec<Statement> {
-    if string.is_empty() {
-        return compile_empty_string();
-    }
-
-    let mut statements = vec![];
-
-    // Stash the top address and cast it to the string type.
-    statements.push(Statement::Mov { dest: R9, src: RBX });
-    statements.push(Statement::Or {
-        dest: R9,
-        src: Operand::Immediate(STRING_TYPE.tag.0 as i64),
-    });
-
-    // Put the length of the string at the beginning.
-    // Note: The length is guaranteed to be an integer, so we can strip the type tag.
-    statements.push(Statement::Mov {
-        dest: RAX,
-        src: Operand::Immediate(string.len() as i64),
-    });
-    statements.push(Statement::Mov {
-        dest: Operand::Offset(Register::RBX, 0),
-        src: RAX,
-    });
-    statements.push(Statement::Add {
-        dest: RBX,
-        src: Operand::Immediate(8),
-    });
-
-    for c in string.chars() {
-        statements.push(Statement::Mov {
-            dest: EAX,
-            src: Operand::Immediate(c as i64), // Each element is guaranteed to be a character, so the type tag is not needed.
-        });
-        statements.push(Statement::Mov {
-            dest: Operand::Offset(Register::RBX, 0),
-            src: EAX,
-        });
-        statements.push(Statement::Add {
-            dest: RBX,
-            src: Operand::Immediate(4), // 4 bytes per character
-        });
-    }
-
-    // Return the string.
-    statements.push(Statement::Mov { dest: RAX, src: R9 });
-    statements
-}
-
-fn compile_empty_string() -> Vec<Statement> {
-    vec![Statement::Mov {
-        dest: RAX,
-        src: Operand::from(Value::EmptyString),
-    }]
 }
 
 /// Returns instructions which sets rax to the character in the string at the given index,
@@ -295,4 +248,109 @@ pub fn compare_strings(string: &str, compiler: &mut Compiler) -> Vec<Statement> 
     statements.push(Statement::Label { name: neq_label });
 
     statements
+}
+
+/// Returns instructions which sets rax to the given string literal.
+pub fn compile_string_literal(string: &str, compiler: &Compiler) -> Vec<Statement> {
+    let Label(label) = compiler
+        .string_literal_label(string)
+        .expect(format!("String literal '{}' not found in the table", string).as_str());
+
+    // Tag the address of the label as the string type.
+    vec![Statement::LeaArithmetic {
+        dest: RAX,
+        expr: format!("[{} + {}]", label, STRING_TYPE.tag.0),
+    }]
+}
+
+/// Returns pseudo-instructions declaring static data for all string literals in the program.
+pub fn compile_all_string_data(compiler: &Compiler) -> Vec<Statement> {
+    let mut statements = vec![];
+    for (string, label) in compiler.string_literals() {
+        statements.push(Statement::Label {
+            name: label.0.clone(),
+        });
+        statements.extend(compile_string_data(string));
+    }
+    statements
+}
+
+/// Returns pseudo-instructions declaring compile-time static string data,
+/// which should be put in the data section.
+fn compile_string_data(string: &str) -> Vec<Statement> {
+    let mut statements = vec![Statement::Dq {
+        value: string.len() as i64,
+    }];
+    statements.extend(string.chars().map(|c| Statement::Dd { value: c as i32 }));
+    statements
+}
+
+pub fn all_string_literals(program: &Program) -> HashSet<String> {
+    let mut result = HashSet::new();
+    for function_definition in &program.function_definitions {
+        result.extend(string_literals(&function_definition.body));
+    }
+    result.extend(string_literals(&program.expr));
+    result
+}
+
+fn string_literals(expr: &Expr) -> HashSet<String> {
+    match expr {
+        Expr::Lit(Lit::String(s)) => {
+            let mut result = HashSet::new();
+            result.insert(s.clone());
+            result
+        }
+
+        // Just recurse into subexpressions.
+        Expr::Prim1(_, e) => string_literals(e),
+        Expr::Prim2(_, e1, e2) => {
+            let mut result = string_literals(e1);
+            result.extend(string_literals(e2));
+            result
+        }
+        Expr::Prim3(_, e1, e2, e3) => {
+            let mut result = string_literals(e1);
+            result.extend(string_literals(e2));
+            result.extend(string_literals(e3));
+            result
+        }
+        Expr::Begin(e1, e2) => {
+            let mut result = string_literals(e1);
+            result.extend(string_literals(e2));
+            result
+        }
+        Expr::App(App { function, args }) => {
+            let mut result = string_literals(function);
+            for arg in args {
+                result.extend(string_literals(arg));
+            }
+            result
+        }
+        Expr::If(If { cond, then, els }) => {
+            let mut result = string_literals(cond);
+            result.extend(string_literals(then));
+            result.extend(string_literals(els));
+            result
+        }
+        Expr::Match(Match { expr, arms }) => {
+            let mut result = string_literals(expr);
+            for arm in arms {
+                result.extend(string_literals(&arm.body));
+            }
+            result
+        }
+        Expr::Let(Let { binding, body }) => {
+            let mut result = string_literals(&binding.rhs);
+            result.extend(string_literals(body));
+            result
+        }
+        Expr::Lambda(Lambda {
+            id: _,
+            params: _,
+            body,
+        }) => string_literals(body),
+
+        Expr::Lit(_) | Expr::Variable(_) | Expr::Eof | Expr::Prim0(_) => HashSet::new(),
+    }
 }

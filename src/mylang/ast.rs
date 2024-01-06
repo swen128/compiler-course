@@ -113,7 +113,8 @@ pub enum Op2 {
     Sub,
     /// Returns true if the first operand is less than the second operand. 
     LessThan,
-    Equal,
+    IntEq,
+    Eq,
     Cons,
     /// Returns a new vector of the given length, with each element initialized to the given value.
     /// The first operand is the length of the vector, and the second operand is the initial value.

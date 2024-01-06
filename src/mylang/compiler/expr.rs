@@ -26,7 +26,7 @@ pub fn compile_expr(
 ) -> Vec<Statement> {
     match expr {
         ast::Expr::Eof => compile_value(Value::Eof),
-        ast::Expr::Lit(lit) => compile_literal(lit),
+        ast::Expr::Lit(lit) => compile_literal(lit, &compiler),
 
         ast::Expr::Prim0(op) => compile_prim0(op),
         ast::Expr::Prim1(op, expr) => compile_prim1(op, *expr, compiler, env),
@@ -51,12 +51,12 @@ pub fn compile_expr(
     }
 }
 
-fn compile_literal(lit: ast::Lit) -> Vec<Statement> {
+fn compile_literal(lit: ast::Lit, compiler: &Compiler) -> Vec<Statement> {
     match lit {
         ast::Lit::Int(i) => compile_value(Value::Int(i)),
         ast::Lit::Bool(b) => compile_value(Value::Boolean(b)),
         ast::Lit::Char(c) => compile_value(Value::Char(c)),
-        ast::Lit::String(s) => compile_string_literal(&s),
+        ast::Lit::String(s) => compile_string_literal(&s, compiler),
         ast::Lit::EmptyList => compile_value(Value::EmptyList),
     }
 }

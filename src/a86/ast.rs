@@ -3,6 +3,10 @@ pub enum Statement {
     Global { name: String },
     Extern { name: String },
     Label { name: String },
+    Data,
+    Text,
+    Dq { value: i64 },
+    Dd { value: i32 },
     Mov { dest: Operand, src: Operand },
     And { dest: Operand, src: Operand },
     Or { dest: Operand, src: Operand },
@@ -23,6 +27,7 @@ pub enum Statement {
     Add { dest: Operand, src: Operand },
     Sub { dest: Operand, src: Operand },
     Lea { dest: Operand, label: String },
+    LeaArithmetic { dest: Operand, expr: String },
     Call { label: String },
     Ret,
 }

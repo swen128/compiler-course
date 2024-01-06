@@ -385,6 +385,14 @@ fn string_literal() {
 }
 
 #[test]
+fn string_literals_equal() {
+    let input = "(eq? \"abc\" \"abc\")";
+    let result = run(input).unwrap();
+    let expected = "#t";
+    assert_eq!(result, expected);
+}
+
+#[test]
 fn string_ref() {
     let input = "(string-ref \"abc\" 1)";
     let result = run(input).unwrap();
